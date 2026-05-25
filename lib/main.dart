@@ -116,6 +116,133 @@ class YieldResult {
   }
 }
 
+/// Pure-function yield math. No Flutter, no HTTP, no DateTime.now().
+/// All inputs are explicit so this class is trivially testable.
+class YieldMath {
+  static YieldResult compute({
+    required String ticker,
+    required double currentPrice,
+    required double federalPct,
+    required double statePct,
+    required double localPct,
+    required List<DistributionEntry> distributions,
+    required List<MonthlyClose> monthlyCloses,
+  }) {
+    final sortedCloses = [...monthlyCloses]
+      ..sort((a, b) => a.monthStart.compareTo(b.monthStart));
+
+    if (distributions.isEmpty) {
+      return YieldResult.doesNotQualify(
+        ticker: ticker,
+        currentPrice: currentPrice,
+        reason: 'no distributions in last 12 months',
+        monthlyCloses: sortedCloses,
+      );
+    }
+
+    final combined = (federalPct + statePct + localPct) / 100.0;
+    final ascDist = [...distributions]
+      ..sort((a, b) => a.date.compareTo(b.date));
+    final divByBar = List<double>.filled(sortedCloses.length, 0);
+
+    double sum = 0;
+    double compoundFactorGross = 1;
+    double compoundFactorNet = 1;
+
+    for (final d in ascDist) {
+      sum += d.amount;
+      final barIdx = barIndexAt(d.date, sortedCloses);
+      if (barIdx >= 0 && barIdx < divByBar.length) {
+        divByBar[barIdx] += d.amount;
+      }
+      final priceAtDiv = priceAt(d.date, sortedCloses) ?? currentPrice;
+      compoundFactorGross *= 1 + d.amount / priceAtDiv;
+      compoundFactorNet *= 1 + (d.amount * (1 - combined)) / priceAtDiv;
+    }
+
+    final grossYield = sum / currentPrice;
+    final afterTax = grossYield * (1 - combined);
+
+    final validCloses = sortedCloses
+        .map((c) => c.close)
+        .whereType<double>()
+        .where((v) => v > 0)
+        .toList();
+    final avgPrice = validCloses.isEmpty
+        ? currentPrice
+        : validCloses.reduce((a, b) => a + b) / validCloses.length;
+    final avgGross = sum / avgPrice;
+    final avgNet = avgGross * (1 - combined);
+
+    double twrFactorGross = 1;
+    double twrFactorNet = 1;
+    for (int i = 0; i + 1 < sortedCloses.length; i++) {
+      final p0 = sortedCloses[i].close;
+      final p1 = sortedCloses[i + 1].close;
+      if (p0 == null || p1 == null || p0 <= 0) continue;
+      final d = i < divByBar.length ? divByBar[i] : 0.0;
+      twrFactorGross *= (p1 + d) / p0;
+      twrFactorNet *= (p1 + d * (1 - combined)) / p0;
+    }
+
+    final descDist = [...distributions]
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    return YieldResult(
+      ticker: ticker,
+      currentPrice: currentPrice,
+      sumDistributions: sum,
+      grossYield: grossYield,
+      afterTaxYield: afterTax,
+      compoundedGrossYield: compoundFactorGross - 1,
+      compoundedAfterTaxYield: compoundFactorNet - 1,
+      avgPriceGrossYield: avgGross,
+      avgPriceAfterTaxYield: avgNet,
+      twrGross: twrFactorGross - 1,
+      twrAfterTax: twrFactorNet - 1,
+      distributions: descDist,
+      monthlyCloses: sortedCloses,
+      qualifies: true,
+    );
+  }
+
+  /// Index of the latest bar whose monthStart is on or before [divDate].
+  /// Returns -1 if [bars] is empty or every bar starts after [divDate].
+  @visibleForTesting
+  static int barIndexAt(DateTime divDate, List<MonthlyClose> bars) {
+    if (bars.isEmpty) return -1;
+    int idx = -1;
+    for (int i = 0; i < bars.length; i++) {
+      if (!bars[i].monthStart.isAfter(divDate)) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    return idx;
+  }
+
+  /// Close of the bar identified by [barIndexAt], walking backwards if that
+  /// bar's close is null. If the date is before all bars, falls back to the
+  /// first available bar's close. Returns null only when no bar in the entire
+  /// list has a non-null close.
+  @visibleForTesting
+  static double? priceAt(DateTime divDate, List<MonthlyClose> bars) {
+    if (bars.isEmpty) return null;
+    final idx = barIndexAt(divDate, bars);
+    final start = idx >= 0 ? idx : 0;
+    for (int j = start; j >= 0; j--) {
+      final v = bars[j].close;
+      if (v != null) return v;
+    }
+    for (int j = start + 1; j < bars.length; j++) {
+      final v = bars[j].close;
+      if (v != null) return v;
+    }
+    return null;
+  }
+}
+
 class YieldScreen extends StatefulWidget {
   const YieldScreen({super.key});
 
@@ -268,128 +395,29 @@ class _YieldScreenState extends State<YieldScreen> {
 
     final events = r0['events'] as Map<String, dynamic>?;
     final dividends = events?['dividends'] as Map<String, dynamic>?;
-    if (dividends == null || dividends.isEmpty) {
-      return YieldResult.doesNotQualify(
-        ticker: ticker,
-        currentPrice: price,
-        reason: 'no distributions in last 12 months',
-        monthlyCloses: monthlyCloses,
-      );
-    }
-
     final distributionList = <DistributionEntry>[];
-
-    double sum = 0;
-    double compoundFactorGross = 1;
-    double compoundFactorNet = 1;
-    final combined = (federalPct + statePct + localPct) / 100.0;
-
-    // Bucket distributions by bar period [bars[i], bars[i+1])
-    final divByBar = List<double>.filled(timestamps.length, 0);
-
-    for (final entry in dividends.values) {
-      final m = entry as Map<String, dynamic>;
-      final amt = (m['amount'] as num?)?.toDouble();
-      final divTs = (m['date'] as num?)?.toInt();
-      if (amt == null || divTs == null) continue;
-      sum += amt;
-      distributionList.add(DistributionEntry(
-        date: DateTime.fromMillisecondsSinceEpoch(divTs * 1000, isUtc: true),
-        amount: amt,
-      ));
-
-      final barIdx = _barIndexAt(divTs, timestamps);
-      if (barIdx >= 0 && barIdx < divByBar.length) {
-        divByBar[barIdx] += amt;
+    if (dividends != null) {
+      for (final entry in dividends.values) {
+        final m = entry as Map<String, dynamic>;
+        final amt = (m['amount'] as num?)?.toDouble();
+        final divTs = (m['date'] as num?)?.toInt();
+        if (amt == null || divTs == null) continue;
+        distributionList.add(DistributionEntry(
+          date: DateTime.fromMillisecondsSinceEpoch(divTs * 1000, isUtc: true),
+          amount: amt,
+        ));
       }
-
-      final priceAtDiv = _priceAt(divTs, timestamps, closes) ?? price;
-      compoundFactorGross *= 1 + amt / priceAtDiv;
-      compoundFactorNet *= 1 + (amt * (1 - combined)) / priceAtDiv;
     }
-    distributionList.sort((a, b) => b.date.compareTo(a.date));
 
-    final grossYield = sum / price;
-    final afterTax = grossYield * (1 - combined);
-    final compoundedGross = compoundFactorGross - 1;
-    final compoundedNet = compoundFactorNet - 1;
-
-    // Average-price denominator
-    final validCloses = closes
-        .whereType<num>()
-        .map((n) => n.toDouble())
-        .where((v) => v > 0)
-        .toList();
-    final avgPrice = validCloses.isEmpty
-        ? price
-        : validCloses.reduce((a, b) => a + b) / validCloses.length;
-    final avgGross = sum / avgPrice;
-    final avgNet = avgGross * (1 - combined);
-
-    // TWR using monthly closes: r_t = (P_{t+1} + d_t) / P_t - 1
-    double twrFactorGross = 1;
-    double twrFactorNet = 1;
-    for (int i = 0; i + 1 < timestamps.length; i++) {
-      final p0 = i < closes.length ? closes[i] : null;
-      final p1 = (i + 1) < closes.length ? closes[i + 1] : null;
-      if (p0 is! num || p1 is! num) continue;
-      if (p0 <= 0) continue;
-      final d = i < divByBar.length ? divByBar[i] : 0.0;
-      twrFactorGross *= (p1.toDouble() + d) / p0.toDouble();
-      twrFactorNet *= (p1.toDouble() + d * (1 - combined)) / p0.toDouble();
-    }
-    final twrGross = twrFactorGross - 1;
-    final twrNet = twrFactorNet - 1;
-
-    return YieldResult(
+    return YieldMath.compute(
       ticker: ticker,
       currentPrice: price,
-      sumDistributions: sum,
-      grossYield: grossYield,
-      afterTaxYield: afterTax,
-      compoundedGrossYield: compoundedGross,
-      compoundedAfterTaxYield: compoundedNet,
-      avgPriceGrossYield: avgGross,
-      avgPriceAfterTaxYield: avgNet,
-      twrGross: twrGross,
-      twrAfterTax: twrNet,
+      federalPct: federalPct,
+      statePct: statePct,
+      localPct: localPct,
       distributions: distributionList,
       monthlyCloses: monthlyCloses,
-      qualifies: true,
     );
-  }
-
-  int _barIndexAt(int divTs, List<int> bars) {
-    if (bars.isEmpty) return -1;
-    int idx = 0;
-    for (int i = 0; i < bars.length; i++) {
-      if (bars[i] <= divTs) {
-        idx = i;
-      } else {
-        break;
-      }
-    }
-    return idx;
-  }
-
-  double? _priceAt(
-      int divTs, List<int> bars, List<dynamic> closes) {
-    if (bars.isEmpty || closes.isEmpty) return null;
-    int idx = 0;
-    for (int i = 0; i < bars.length; i++) {
-      if (bars[i] <= divTs) {
-        idx = i;
-      } else {
-        break;
-      }
-    }
-    final raw = idx < closes.length ? closes[idx] : null;
-    if (raw is num) return raw.toDouble();
-    for (int j = idx; j >= 0; j--) {
-      final v = j < closes.length ? closes[j] : null;
-      if (v is num) return v.toDouble();
-    }
-    return null;
   }
 
   @override

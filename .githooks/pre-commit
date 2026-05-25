@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# iYield pre-commit hook.
+#
+# Enable once per checkout:
+#   git config core.hooksPath .githooks
+#
+# Runs static analysis and the full test suite before allowing a commit.
+# Fail-fast on the first error; nothing else has run, so nothing to clean up.
+
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "[pre-commit] flutter analyze"
+flutter analyze
+
+echo "[pre-commit] flutter test"
+flutter test

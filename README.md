@@ -21,7 +21,7 @@ Captured on iOS 26 simulator at 1206×2622 (iPhone 17). Inputs: `YMAG`, federal 
 </tr>
 </table>
 
-The Calculate screenshot tells the whole story this app exists for: YMAG's headline TTM yield is **15.68%**, but reinvesting at each month's actual price drags it to **14.13%** (DRIP), and once you include the **−16.13%** price decline from the Prices tab, total return is **−6.27% gross / −10.00% after-tax**. The "yield" is real but the share-price drop more than ate it.
+The Calculate tab leads with the two numbers a yield-investor actually needs to see: **After-tax effective yield (compounded DRIP) 8.70%** in indigo, and **Total return after tax −10.00%** in red. Underneath, the full grid of gross vs. after-tax for all four methods, with after-tax bold and color-coded by sign. The story: YMAG's headline TTM yield is **15.68%**, but reinvesting at each month's actual price drags it to **14.13%** (DRIP), and once you include the **−16.13%** price decline visible on the Prices tab, total return is **−6.27% gross / −10.00% after-tax**. The "yield" is real but the share-price drop more than ate it.
 
 ## What it shows
 
@@ -50,6 +50,7 @@ Personal tool, single-developer, not for general distribution.
 - **v1** — initial scaffold, single screen, simple TTM yield, qualifying / non-qualifying path. Built in under 21 minutes.
 - **v2** — three additional yield views (compounded DRIP, average-price denominator, total return), tabs for distributions and prices, local input persistence, Apache 2.0 license + privacy policy.
 - **v2.1** — extracted `YieldMath` as a pure-function class, added a 20-test suite covering the four computations and the UI behavior, wired a pre-commit hook that enforces analyze + test.
+- **v2.2** — result card redesigned to lead with the two most important numbers (after-tax DRIP yield and total return after tax) as large color-coded hero rows, with all four views collapsed into a compact gross/after-tax table below. App is dark-mode only. Positive after-tax returns render green, negative returns red, status as a colored pill at the top of the card.
 
 See [SESSION_LOG.md](./SESSION_LOG.md) for per-iteration scope and elapsed time.
 

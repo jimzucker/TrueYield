@@ -30,6 +30,12 @@ class IYieldApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'iYield',
+      themeMode: ThemeMode.dark,
+      darkTheme: ThemeData(
+        colorSchemeSeed: Colors.indigo,
+        brightness: Brightness.dark,
+        useMaterial3: true,
+      ),
       theme: ThemeData(
         colorSchemeSeed: Colors.indigo,
         useMaterial3: true,
@@ -530,81 +536,269 @@ class _ResultCard extends StatelessWidget {
   const _ResultCard({required this.result});
 
   String _money(double v) => '\$${v.toStringAsFixed(2)}';
-  String _pct(double v) => '${(v * 100).toStringAsFixed(2)}%';
 
   @override
   Widget build(BuildContext context) {
     final r = result;
+    final theme = Theme.of(context);
+
+    if (!r.qualifies) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(r.ticker, style: theme.textTheme.headlineSmall),
+                  _StatusChip(qualifies: false),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Current price'),
+                  Text(_money(r.currentPrice),
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text('Does not qualify (${r.reason})',
+                  style: TextStyle(
+                      color: theme.colorScheme.error,
+                      fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(r.ticker,
-                style: Theme.of(context).textTheme.headlineSmall),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(r.ticker, style: theme.textTheme.headlineSmall),
+                _StatusChip(qualifies: true),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${_money(r.currentPrice)} • '
+              'TTM distributions ${_money(r.sumDistributions)}',
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const Divider(height: 24),
+
+            // ─── Hero: the two numbers a yield-investor actually cares about.
+            _HeroNumber(
+              label: 'After-tax effective yield',
+              sublabel: 'income only • compounded at month-of-payout price',
+              value: r.compoundedAfterTaxYield,
+              alwaysIndigo: true,
+            ),
+            const SizedBox(height: 12),
+            _HeroNumber(
+              label: 'Total return after tax',
+              sublabel: 'income + price change over the last 12 months',
+              value: r.twrAfterTax,
+              alwaysIndigo: false,
+            ),
+            const Divider(height: 28),
+
+            // ─── Detail: all four views in a tight gross/after-tax table.
+            Text('All views', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 6),
+            _ViewsTable(result: r),
             const SizedBox(height: 8),
-            _row('Current price', _money(r.currentPrice)),
-            if (r.qualifies) ...[
-              _row('Trailing 12mo distributions', _money(r.sumDistributions)),
-              _section(context, 'Simple TTM',
-                  'sum(distributions) / current price'),
-              _row('Gross yield', _pct(r.grossYield)),
-              _row('After-tax yield', _pct(r.afterTaxYield)),
-              _section(context, 'Compounded (DRIP)',
-                  '∏(1 + d_t / P_t) − 1 using monthly closes'),
-              _row('Gross yield', _pct(r.compoundedGrossYield)),
-              _row('After-tax yield', _pct(r.compoundedAfterTaxYield)),
-              _section(context, 'Average-price denominator',
-                  'sum(distributions) / mean(monthly closes)'),
-              _row('Gross yield', _pct(r.avgPriceGrossYield)),
-              _row('After-tax yield', _pct(r.avgPriceAfterTaxYield)),
-              _section(context, 'Total return (TWR)',
-                  '∏((P_{t+1} + d_t) / P_t) − 1 — includes price change'),
-              _row('Gross', _pct(r.twrGross)),
-              _row('After-tax (dist. only)', _pct(r.twrAfterTax)),
-              const SizedBox(height: 8),
-              const Text('Qualifies',
-                  style: TextStyle(
-                      color: Colors.green, fontWeight: FontWeight.bold)),
-            ] else ...[
-              const SizedBox(height: 8),
-              Text('Does not qualify (${r.reason})',
-                  style: const TextStyle(
-                      color: Colors.red, fontWeight: FontWeight.bold)),
-            ],
+            Text(
+              'Simple TTM = sum/current. '
+              'DRIP = ∏(1 + d/P_t). '
+              'Avg = sum/mean(closes). '
+              'TWR = ∏((P_{t+1}+d)/P_t).',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _row(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
+class _StatusChip extends StatelessWidget {
+  final bool qualifies;
+  const _StatusChip({required this.qualifies});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isOk = qualifies;
+    final bg = isOk
+        ? Colors.green.withValues(alpha: 0.18)
+        : scheme.errorContainer;
+    final fg = isOk ? Colors.greenAccent.shade400 : scheme.onErrorContainer;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        isOk ? 'Qualifies' : 'Does not qualify',
+        style: TextStyle(
+            color: fg, fontWeight: FontWeight.w700, fontSize: 12),
       ),
     );
   }
+}
 
-  Widget _section(BuildContext context, String title, String subtitle) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-          Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-        ],
+class _HeroNumber extends StatelessWidget {
+  final String label;
+  final String sublabel;
+  final double value;
+  final bool alwaysIndigo;
+  const _HeroNumber({
+    required this.label,
+    required this.sublabel,
+    required this.value,
+    required this.alwaysIndigo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isNeg = value < 0;
+    final color = alwaysIndigo
+        ? theme.colorScheme.primary
+        : (isNeg ? Colors.redAccent.shade200 : Colors.greenAccent.shade400);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+              Text(sublabel,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          '${(value * 100).toStringAsFixed(2)}%',
+          style: theme.textTheme.headlineMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontFeatures: const [FontFeature.tabularFigures()]),
+        ),
+      ],
+    );
+  }
+}
+
+class _ViewsTable extends StatelessWidget {
+  final YieldResult result;
+  const _ViewsTable({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    final r = result;
+    final theme = Theme.of(context);
+    final rows = <(String, double, double)>[
+      ('Simple TTM', r.grossYield, r.afterTaxYield),
+      ('Compounded DRIP', r.compoundedGrossYield, r.compoundedAfterTaxYield),
+      ('Avg-price denom.', r.avgPriceGrossYield, r.avgPriceAfterTaxYield),
+      ('Total return (TWR)', r.twrGross, r.twrAfterTax),
+    ];
+    return Table(
+      columnWidths: const {
+        0: FlexColumnWidth(2),
+        1: IntrinsicColumnWidth(),
+        2: IntrinsicColumnWidth(),
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: [
+        TableRow(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text('Method',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              child: Text('Gross',
+                  textAlign: TextAlign.right,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+              child: Text('After-tax',
+                  textAlign: TextAlign.right,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
+          ],
+        ),
+        for (final (label, gross, net) in rows)
+          TableRow(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text(label, style: theme.textTheme.bodyMedium),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                child: _PctCell(value: gross, bold: false),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                child: _PctCell(value: net, bold: true),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _PctCell extends StatelessWidget {
+  final double value;
+  final bool bold;
+  const _PctCell({required this.value, required this.bold});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = value < 0
+        ? Colors.redAccent.shade200
+        : (bold
+            ? Colors.greenAccent.shade400
+            : theme.colorScheme.onSurface);
+    return Text(
+      '${(value * 100).toStringAsFixed(2)}%',
+      textAlign: TextAlign.right,
+      style: TextStyle(
+        color: color,
+        fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+        fontFeatures: const [FontFeature.tabularFigures()],
       ),
     );
   }

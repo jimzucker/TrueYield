@@ -15,6 +15,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iyield/main.dart';
 
+import 'fixtures/tqqq_2026_05_27.dart';
+import 'fixtures/ymag_2026_05_27.dart' as ymag_daily;
+
 /// Closeness tolerance for yield comparisons. 1e-9 is tight enough to catch
 /// any real math error and loose enough to survive harmless IEEE-754 drift.
 const _eps = 1e-9;
@@ -217,6 +220,53 @@ void main() {
       expect(result.avgPriceAfterTaxYield, closeTo(0.089737, 1e-5));
       expect(result.twrGross, closeTo(-0.062668, 1e-5));
       expect(result.twrAfterTax, closeTo(-0.100041, 1e-5));
+    });
+
+    // Live daily-bar fixtures captured 2026-05-27. Expected values produced by
+    // an independent Python port of YieldMath.compute (see tools/yield_ref.py)
+    // over the same Yahoo JSON the fixture files were derived from.
+    test('YMAG daily-bar fixture (2026-05-27) matches reference', () {
+      final result = YieldMath.compute(
+        ticker: 'YMAG',
+        currentPrice: ymag_daily.kYMAGCurrentPrice,
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        distributions: ymag_daily.kYMAGDistributions,
+        priceBars: ymag_daily.kYMAGPriceBars,
+      );
+      expect(result.qualifies, isTrue);
+      expect(result.sumDistributions, closeTo(6.5590, 1e-4));
+      expect(result.grossYield, closeTo(0.511622, 1e-5));
+      expect(result.afterTaxYield, closeTo(0.322322, 1e-5));
+      expect(result.compoundedGrossYield, closeTo(0.573860, 1e-5));
+      expect(result.compoundedAfterTaxYield, closeTo(0.331414, 1e-5));
+      expect(result.avgPriceGrossYield, closeTo(0.458181, 1e-5));
+      expect(result.avgPriceAfterTaxYield, closeTo(0.288654, 1e-5));
+      expect(result.twrGross, closeTo(0.292988, 1e-5));
+      expect(result.twrAfterTax, closeTo(0.093418, 1e-5));
+    });
+
+    test('TQQQ daily-bar fixture (2026-05-27) matches reference', () {
+      final result = YieldMath.compute(
+        ticker: 'TQQQ',
+        currentPrice: kTQQQCurrentPrice,
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        distributions: kTQQQDistributions,
+        priceBars: kTQQQPriceBars,
+      );
+      expect(result.qualifies, isTrue);
+      expect(result.sumDistributions, closeTo(0.3160, 1e-4));
+      expect(result.grossYield, closeTo(0.003869, 1e-5));
+      expect(result.afterTaxYield, closeTo(0.002438, 1e-5));
+      expect(result.compoundedGrossYield, closeTo(0.006937, 1e-5));
+      expect(result.compoundedAfterTaxYield, closeTo(0.004366, 1e-5));
+      expect(result.avgPriceGrossYield, closeTo(0.006218, 1e-5));
+      expect(result.avgPriceAfterTaxYield, closeTo(0.003917, 1e-5));
+      expect(result.twrGross, closeTo(1.348760, 1e-5));
+      expect(result.twrAfterTax, closeTo(1.342708, 1e-5));
     });
   });
 

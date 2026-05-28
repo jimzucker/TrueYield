@@ -1,0 +1,28 @@
+# TrueYield launcher icons (Concept B — "TY" monogram).
+# Regenerate after editing assets/icon/*: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/icon/icon.png"
+
+  android: true
+  min_sdk_android: 21
+  adaptive_icon_background: "assets/icon/icon_background.png"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  adaptive_icon_monochrome: "assets/icon/icon_monochrome.png"
+
+  ios: true
+  remove_alpha_ios: true
+
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#283593"
+    theme_color: "#3F51B5"
+
+  macos:
+    generate: true
+    image_path: "assets/icon/icon.png"
+
+  windows:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    icon_size: 256

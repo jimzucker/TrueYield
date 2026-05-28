@@ -1,4 +1,4 @@
-package com.example.iyield
+package com.ijazsoftware.trueyield
 
 import io.flutter.embedding.android.FlutterActivity
 

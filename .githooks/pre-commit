@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
-# iYield pre-commit hook.
+# Copyright 2026 James A. Zucker
+# Licensed under the Apache License, Version 2.0. See LICENSE and NOTICE.
+#
+# TrueYield pre-commit hook.
 #
 # Enable once per checkout:
 #   git config core.hooksPath .githooks
 #
-# Runs static analysis and the full test suite before allowing a commit.
+# Runs formatting, static analysis, and the full test suite before allowing a
+# commit. Mirrors .github/workflows/ci.yml so local and CI gates agree.
 # Fail-fast on the first error; nothing else has run, so nothing to clean up.
 
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
+
+echo "[pre-commit] dart format (check only)"
+dart format --output=none --set-exit-if-changed .
 
 echo "[pre-commit] flutter analyze"
 flutter analyze

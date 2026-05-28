@@ -1,4 +1,4 @@
-// Copyright 2026 Jim Zucker
+// Copyright 2026 James A. Zucker
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import 'package:iyield/main.dart';
+import 'package:true_yield/main.dart';
 
 /// TQQQ snapshot captured 2026-05-27 from Yahoo Finance
 /// /v8/finance/chart/TQQQ?interval=1d&range=1y&events=div
@@ -21,262 +21,1027 @@ import 'package:iyield/main.dart';
 const double kTQQQCurrentPrice = 81.67;
 
 final List<DistributionEntry> kTQQQDistributions = <DistributionEntry>[
-  DistributionEntry(date: DateTime.fromMillisecondsSinceEpoch(1750858200000, isUtc: true), amount: 0.109),
-  DistributionEntry(date: DateTime.fromMillisecondsSinceEpoch(1758720600000, isUtc: true), amount: 0.049),
-  DistributionEntry(date: DateTime.fromMillisecondsSinceEpoch(1766586600000, isUtc: true), amount: 0.086),
-  DistributionEntry(date: DateTime.fromMillisecondsSinceEpoch(1774445400000, isUtc: true), amount: 0.072),
+  DistributionEntry(
+    date: DateTime.fromMillisecondsSinceEpoch(1750858200000, isUtc: true),
+    amount: 0.109,
+  ),
+  DistributionEntry(
+    date: DateTime.fromMillisecondsSinceEpoch(1758720600000, isUtc: true),
+    amount: 0.049,
+  ),
+  DistributionEntry(
+    date: DateTime.fromMillisecondsSinceEpoch(1766586600000, isUtc: true),
+    amount: 0.086,
+  ),
+  DistributionEntry(
+    date: DateTime.fromMillisecondsSinceEpoch(1774445400000, isUtc: true),
+    amount: 0.072,
+  ),
 ];
 
 final List<PriceBar> kTQQQPriceBars = <PriceBar>[
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1748439000000, isUtc: true), close: 35.01499938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1748525400000, isUtc: true), close: 35.185001373291016),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1748611800000, isUtc: true), close: 35.0),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1748871000000, isUtc: true), close: 35.80500030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1748957400000, isUtc: true), close: 36.63999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1749043800000, isUtc: true), close: 36.935001373291016),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1749130200000, isUtc: true), close: 36.07500076293945),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1749216600000, isUtc: true), close: 37.10499954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1749475800000, isUtc: true), close: 37.27000045776367),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1749562200000, isUtc: true), close: 37.9900016784668),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1749648600000, isUtc: true), close: 37.599998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1749735000000, isUtc: true), close: 37.845001220703125),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1749821400000, isUtc: true), close: 36.415000915527344),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1750080600000, isUtc: true), close: 37.900001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1750167000000, isUtc: true), close: 36.779998779296875),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1750253400000, isUtc: true), close: 36.72999954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1750426200000, isUtc: true), close: 36.224998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1750685400000, isUtc: true), close: 37.349998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1750771800000, isUtc: true), close: 39.04999923706055),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1750858200000, isUtc: true), close: 39.2400016784668),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1750944600000, isUtc: true), close: 40.314998626708984),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1751031000000, isUtc: true), close: 40.709999084472656),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1751290200000, isUtc: true), close: 41.5),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1751376600000, isUtc: true), close: 40.44499969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1751463000000, isUtc: true), close: 41.25),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1751549400000, isUtc: true), close: 42.404998779296875),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1751895000000, isUtc: true), close: 41.459999084472656),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1751981400000, isUtc: true), close: 41.51499938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1752067800000, isUtc: true), close: 42.375),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1752154200000, isUtc: true), close: 42.18000030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1752240600000, isUtc: true), close: 41.86000061035156),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1752499800000, isUtc: true), close: 42.30500030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1752586200000, isUtc: true), close: 42.415000915527344),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1752672600000, isUtc: true), close: 42.53499984741211),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1752759000000, isUtc: true), close: 43.525001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1752845400000, isUtc: true), close: 43.375),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1753104600000, isUtc: true), close: 44.03499984741211),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1753191000000, isUtc: true), close: 43.349998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1753277400000, isUtc: true), close: 43.91999816894531),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1753363800000, isUtc: true), close: 44.209999084472656),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1753450200000, isUtc: true), close: 44.459999084472656),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1753709400000, isUtc: true), close: 44.89500045776367),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1753795800000, isUtc: true), close: 44.689998626708984),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1753882200000, isUtc: true), close: 44.845001220703125),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1753968600000, isUtc: true), close: 44.10499954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1754055000000, isUtc: true), close: 41.459999084472656),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1754314200000, isUtc: true), close: 43.72999954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1754400600000, isUtc: true), close: 42.81999969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1754487000000, isUtc: true), close: 44.41999816894531),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1754573400000, isUtc: true), close: 44.869998931884766),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1754659800000, isUtc: true), close: 46.08000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1754919000000, isUtc: true), close: 45.67499923706055),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1755005400000, isUtc: true), close: 47.36000061035156),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1755091800000, isUtc: true), close: 47.43000030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1755178200000, isUtc: true), close: 47.29999923706055),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1755264600000, isUtc: true), close: 46.630001068115234),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1755523800000, isUtc: true), close: 46.56999969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1755610200000, isUtc: true), close: 44.66999816894531),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1755696600000, isUtc: true), close: 43.85499954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1755783000000, isUtc: true), close: 43.244998931884766),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1755869400000, isUtc: true), close: 45.189998626708984),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1756128600000, isUtc: true), close: 44.79499816894531),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1756215000000, isUtc: true), close: 45.314998626708984),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1756301400000, isUtc: true), close: 45.52000045776367),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1756387800000, isUtc: true), close: 46.349998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1756474200000, isUtc: true), close: 44.68000030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1756819800000, isUtc: true), close: 43.540000915527344),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1756906200000, isUtc: true), close: 44.55500030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1756992600000, isUtc: true), close: 45.7599983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1757079000000, isUtc: true), close: 45.90999984741211),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1757338200000, isUtc: true), close: 46.564998626708984),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1757424600000, isUtc: true), close: 46.94499969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1757511000000, isUtc: true), close: 46.994998931884766),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1757597400000, isUtc: true), close: 47.78499984741211),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1757683800000, isUtc: true), close: 48.380001068115234),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1757943000000, isUtc: true), close: 49.6150016784668),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1758029400000, isUtc: true), close: 49.47999954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1758115800000, isUtc: true), close: 49.165000915527344),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1758202200000, isUtc: true), close: 50.4900016784668),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1758288600000, isUtc: true), close: 51.4900016784668),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1758547800000, isUtc: true), close: 52.36000061035156),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1758634200000, isUtc: true), close: 51.30500030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1758720600000, isUtc: true), close: 50.70500183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1758807000000, isUtc: true), close: 50.025001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1758893400000, isUtc: true), close: 50.625),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1759152600000, isUtc: true), close: 51.29999923706055),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1759239000000, isUtc: true), close: 51.70000076293945),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1759325400000, isUtc: true), close: 52.43000030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1759411800000, isUtc: true), close: 53.06999969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1759498200000, isUtc: true), close: 52.349998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1759757400000, isUtc: true), close: 53.52000045776367),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1759843800000, isUtc: true), close: 52.654998779296875),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1759930200000, isUtc: true), close: 54.439998626708984),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1760016600000, isUtc: true), close: 54.224998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1760103000000, isUtc: true), close: 48.53499984741211),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1760362200000, isUtc: true), close: 51.6150016784668),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1760448600000, isUtc: true), close: 50.564998626708984),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1760535000000, isUtc: true), close: 51.599998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1760621400000, isUtc: true), close: 51.025001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1760707800000, isUtc: true), close: 51.994998931884766),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1760967000000, isUtc: true), close: 53.94499969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1761053400000, isUtc: true), close: 53.8849983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1761139800000, isUtc: true), close: 52.29999923706055),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1761226200000, isUtc: true), close: 53.61000061035156),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1761312600000, isUtc: true), close: 55.279998779296875),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1761571800000, isUtc: true), close: 58.21500015258789),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1761658200000, isUtc: true), close: 59.54499816894531),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1761744600000, isUtc: true), close: 60.30500030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1761831000000, isUtc: true), close: 57.54499816894531),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1761917400000, isUtc: true), close: 58.36000061035156),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1762180200000, isUtc: true), close: 59.15999984741211),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1762266600000, isUtc: true), close: 55.540000915527344),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1762353000000, isUtc: true), close: 56.619998931884766),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1762439400000, isUtc: true), close: 53.44499969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1762525800000, isUtc: true), close: 52.88999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1762785000000, isUtc: true), close: 56.35499954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1762871400000, isUtc: true), close: 55.88999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1762957800000, isUtc: true), close: 55.775001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1763044200000, isUtc: true), close: 52.33000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1763130600000, isUtc: true), close: 52.369998931884766),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1763389800000, isUtc: true), close: 51.025001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1763476200000, isUtc: true), close: 49.18000030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1763562600000, isUtc: true), close: 50.025001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1763649000000, isUtc: true), close: 46.45000076293945),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1763735400000, isUtc: true), close: 47.47999954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1763994600000, isUtc: true), close: 51.08000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1764081000000, isUtc: true), close: 52.0099983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1764167400000, isUtc: true), close: 53.369998931884766),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1764340200000, isUtc: true), close: 54.540000915527344),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1764599400000, isUtc: true), close: 54.04999923706055),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1764685800000, isUtc: true), close: 55.29999923706055),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1764772200000, isUtc: true), close: 55.689998626708984),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1764858600000, isUtc: true), close: 55.5099983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1764945000000, isUtc: true), close: 56.150001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1765204200000, isUtc: true), close: 55.79999923706055),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1765290600000, isUtc: true), close: 56.0099983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1765377000000, isUtc: true), close: 56.650001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1765463400000, isUtc: true), close: 56.11000061035156),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1765549800000, isUtc: true), close: 52.81999969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1765809000000, isUtc: true), close: 52.02000045776367),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1765895400000, isUtc: true), close: 52.33000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1765981800000, isUtc: true), close: 49.400001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1766068200000, isUtc: true), close: 51.5099983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1766154600000, isUtc: true), close: 53.52000045776367),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1766413800000, isUtc: true), close: 54.25),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1766500200000, isUtc: true), close: 55.0099983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1766586600000, isUtc: true), close: 55.36000061035156),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1766759400000, isUtc: true), close: 55.310001373291016),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1767018600000, isUtc: true), close: 54.4900016784668),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1767105000000, isUtc: true), close: 54.099998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1767191400000, isUtc: true), close: 52.720001220703125),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1767364200000, isUtc: true), close: 52.349998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1767623400000, isUtc: true), close: 53.599998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1767709800000, isUtc: true), close: 55.0099983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1767796200000, isUtc: true), close: 55.16999816894531),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1767882600000, isUtc: true), close: 54.189998626708984),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1767969000000, isUtc: true), close: 55.7599983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1768228200000, isUtc: true), close: 55.88999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1768314600000, isUtc: true), close: 55.599998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1768401000000, isUtc: true), close: 53.83000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1768487400000, isUtc: true), close: 54.380001068115234),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1768573800000, isUtc: true), close: 54.13999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1768919400000, isUtc: true), close: 50.72999954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1769005800000, isUtc: true), close: 52.72999954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1769092200000, isUtc: true), close: 53.900001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1769178600000, isUtc: true), close: 54.380001068115234),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1769437800000, isUtc: true), close: 55.08000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1769524200000, isUtc: true), close: 56.540000915527344),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1769610600000, isUtc: true), close: 57.060001373291016),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1769697000000, isUtc: true), close: 56.040000915527344),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1769783400000, isUtc: true), close: 54.0),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1770042600000, isUtc: true), close: 55.099998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1770129000000, isUtc: true), close: 52.52000045776367),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1770215400000, isUtc: true), close: 49.7599983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1770301800000, isUtc: true), close: 47.63999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1770388200000, isUtc: true), close: 50.59000015258789),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1770647400000, isUtc: true), close: 51.7400016784668),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1770733800000, isUtc: true), close: 51.02000045776367),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1770820200000, isUtc: true), close: 51.400001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1770906600000, isUtc: true), close: 48.2599983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1770993000000, isUtc: true), close: 48.470001220703125),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1771338600000, isUtc: true), close: 48.349998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1771425000000, isUtc: true), close: 49.38999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1771511400000, isUtc: true), close: 48.83000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1771597800000, isUtc: true), close: 50.060001373291016),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1771857000000, isUtc: true), close: 48.2400016784668),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1771943400000, isUtc: true), close: 49.779998779296875),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1772029800000, isUtc: true), close: 51.869998931884766),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1772116200000, isUtc: true), close: 50.04999923706055),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1772202600000, isUtc: true), close: 49.52000045776367),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1772461800000, isUtc: true), close: 49.70000076293945),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1772548200000, isUtc: true), close: 48.099998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1772634600000, isUtc: true), close: 50.2599983215332),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1772721000000, isUtc: true), close: 49.79999923706055),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1772807400000, isUtc: true), close: 47.540000915527344),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1773063000000, isUtc: true), close: 49.38999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1773149400000, isUtc: true), close: 49.400001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1773235800000, isUtc: true), close: 49.349998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1773322200000, isUtc: true), close: 46.83000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1773408600000, isUtc: true), close: 45.93000030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1773667800000, isUtc: true), close: 47.459999084472656),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1773754200000, isUtc: true), close: 48.15999984741211),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1773840600000, isUtc: true), close: 46.099998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1773927000000, isUtc: true), close: 45.689998626708984),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1774013400000, isUtc: true), close: 43.08000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1774272600000, isUtc: true), close: 44.56999969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1774359000000, isUtc: true), close: 43.619998931884766),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1774445400000, isUtc: true), close: 44.38999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1774531800000, isUtc: true), close: 41.22999954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1774618200000, isUtc: true), close: 38.779998779296875),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1774877400000, isUtc: true), close: 37.88999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1774963800000, isUtc: true), close: 41.68000030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1775050200000, isUtc: true), close: 43.22999954223633),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1775136600000, isUtc: true), close: 43.33000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1775482200000, isUtc: true), close: 44.099998474121094),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1775568600000, isUtc: true), close: 44.150001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1775655000000, isUtc: true), close: 48.0),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1775741400000, isUtc: true), close: 48.959999084472656),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1775827800000, isUtc: true), close: 49.16999816894531),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1776087000000, isUtc: true), close: 50.65999984741211),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1776173400000, isUtc: true), close: 53.40999984741211),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1776259800000, isUtc: true), close: 55.650001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1776346200000, isUtc: true), close: 56.43000030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1776432600000, isUtc: true), close: 58.59000015258789),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1776691800000, isUtc: true), close: 58.08000183105469),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1776778200000, isUtc: true), close: 57.400001525878906),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1776864600000, isUtc: true), close: 60.209999084472656),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1776951000000, isUtc: true), close: 59.220001220703125),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1777037400000, isUtc: true), close: 62.560001373291016),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1777296600000, isUtc: true), close: 62.63999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1777383000000, isUtc: true), close: 60.7400016784668),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1777469400000, isUtc: true), close: 61.86000061035156),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1777555800000, isUtc: true), close: 63.540000915527344),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1777642200000, isUtc: true), close: 65.30000305175781),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1777901400000, isUtc: true), close: 64.91000366210938),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1777987800000, isUtc: true), close: 67.38999938964844),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1778074200000, isUtc: true), close: 71.56999969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1778160600000, isUtc: true), close: 71.33999633789062),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1778247000000, isUtc: true), close: 76.27999877929688),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1778506200000, isUtc: true), close: 76.95999908447266),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1778592600000, isUtc: true), close: 74.95999908447266),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1778679000000, isUtc: true), close: 77.23999786376953),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1778765400000, isUtc: true), close: 78.94999694824219),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1778851800000, isUtc: true), close: 75.33999633789062),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1779111000000, isUtc: true), close: 74.31999969482422),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1779197400000, isUtc: true), close: 72.93000030517578),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1779283800000, isUtc: true), close: 76.51000213623047),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1779370200000, isUtc: true), close: 76.94999694824219),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1779456600000, isUtc: true), close: 77.83999633789062),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1779802200000, isUtc: true), close: 81.94999694824219),
-  PriceBar(date: DateTime.fromMillisecondsSinceEpoch(1779888600000, isUtc: true), close: 81.66999816894531),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1748439000000, isUtc: true),
+    close: 35.01499938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1748525400000, isUtc: true),
+    close: 35.185001373291016,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1748611800000, isUtc: true),
+    close: 35.0,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1748871000000, isUtc: true),
+    close: 35.80500030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1748957400000, isUtc: true),
+    close: 36.63999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1749043800000, isUtc: true),
+    close: 36.935001373291016,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1749130200000, isUtc: true),
+    close: 36.07500076293945,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1749216600000, isUtc: true),
+    close: 37.10499954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1749475800000, isUtc: true),
+    close: 37.27000045776367,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1749562200000, isUtc: true),
+    close: 37.9900016784668,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1749648600000, isUtc: true),
+    close: 37.599998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1749735000000, isUtc: true),
+    close: 37.845001220703125,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1749821400000, isUtc: true),
+    close: 36.415000915527344,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1750080600000, isUtc: true),
+    close: 37.900001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1750167000000, isUtc: true),
+    close: 36.779998779296875,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1750253400000, isUtc: true),
+    close: 36.72999954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1750426200000, isUtc: true),
+    close: 36.224998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1750685400000, isUtc: true),
+    close: 37.349998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1750771800000, isUtc: true),
+    close: 39.04999923706055,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1750858200000, isUtc: true),
+    close: 39.2400016784668,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1750944600000, isUtc: true),
+    close: 40.314998626708984,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1751031000000, isUtc: true),
+    close: 40.709999084472656,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1751290200000, isUtc: true),
+    close: 41.5,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1751376600000, isUtc: true),
+    close: 40.44499969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1751463000000, isUtc: true),
+    close: 41.25,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1751549400000, isUtc: true),
+    close: 42.404998779296875,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1751895000000, isUtc: true),
+    close: 41.459999084472656,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1751981400000, isUtc: true),
+    close: 41.51499938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1752067800000, isUtc: true),
+    close: 42.375,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1752154200000, isUtc: true),
+    close: 42.18000030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1752240600000, isUtc: true),
+    close: 41.86000061035156,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1752499800000, isUtc: true),
+    close: 42.30500030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1752586200000, isUtc: true),
+    close: 42.415000915527344,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1752672600000, isUtc: true),
+    close: 42.53499984741211,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1752759000000, isUtc: true),
+    close: 43.525001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1752845400000, isUtc: true),
+    close: 43.375,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1753104600000, isUtc: true),
+    close: 44.03499984741211,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1753191000000, isUtc: true),
+    close: 43.349998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1753277400000, isUtc: true),
+    close: 43.91999816894531,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1753363800000, isUtc: true),
+    close: 44.209999084472656,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1753450200000, isUtc: true),
+    close: 44.459999084472656,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1753709400000, isUtc: true),
+    close: 44.89500045776367,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1753795800000, isUtc: true),
+    close: 44.689998626708984,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1753882200000, isUtc: true),
+    close: 44.845001220703125,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1753968600000, isUtc: true),
+    close: 44.10499954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1754055000000, isUtc: true),
+    close: 41.459999084472656,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1754314200000, isUtc: true),
+    close: 43.72999954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1754400600000, isUtc: true),
+    close: 42.81999969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1754487000000, isUtc: true),
+    close: 44.41999816894531,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1754573400000, isUtc: true),
+    close: 44.869998931884766,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1754659800000, isUtc: true),
+    close: 46.08000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1754919000000, isUtc: true),
+    close: 45.67499923706055,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1755005400000, isUtc: true),
+    close: 47.36000061035156,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1755091800000, isUtc: true),
+    close: 47.43000030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1755178200000, isUtc: true),
+    close: 47.29999923706055,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1755264600000, isUtc: true),
+    close: 46.630001068115234,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1755523800000, isUtc: true),
+    close: 46.56999969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1755610200000, isUtc: true),
+    close: 44.66999816894531,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1755696600000, isUtc: true),
+    close: 43.85499954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1755783000000, isUtc: true),
+    close: 43.244998931884766,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1755869400000, isUtc: true),
+    close: 45.189998626708984,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1756128600000, isUtc: true),
+    close: 44.79499816894531,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1756215000000, isUtc: true),
+    close: 45.314998626708984,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1756301400000, isUtc: true),
+    close: 45.52000045776367,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1756387800000, isUtc: true),
+    close: 46.349998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1756474200000, isUtc: true),
+    close: 44.68000030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1756819800000, isUtc: true),
+    close: 43.540000915527344,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1756906200000, isUtc: true),
+    close: 44.55500030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1756992600000, isUtc: true),
+    close: 45.7599983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1757079000000, isUtc: true),
+    close: 45.90999984741211,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1757338200000, isUtc: true),
+    close: 46.564998626708984,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1757424600000, isUtc: true),
+    close: 46.94499969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1757511000000, isUtc: true),
+    close: 46.994998931884766,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1757597400000, isUtc: true),
+    close: 47.78499984741211,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1757683800000, isUtc: true),
+    close: 48.380001068115234,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1757943000000, isUtc: true),
+    close: 49.6150016784668,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1758029400000, isUtc: true),
+    close: 49.47999954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1758115800000, isUtc: true),
+    close: 49.165000915527344,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1758202200000, isUtc: true),
+    close: 50.4900016784668,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1758288600000, isUtc: true),
+    close: 51.4900016784668,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1758547800000, isUtc: true),
+    close: 52.36000061035156,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1758634200000, isUtc: true),
+    close: 51.30500030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1758720600000, isUtc: true),
+    close: 50.70500183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1758807000000, isUtc: true),
+    close: 50.025001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1758893400000, isUtc: true),
+    close: 50.625,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1759152600000, isUtc: true),
+    close: 51.29999923706055,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1759239000000, isUtc: true),
+    close: 51.70000076293945,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1759325400000, isUtc: true),
+    close: 52.43000030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1759411800000, isUtc: true),
+    close: 53.06999969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1759498200000, isUtc: true),
+    close: 52.349998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1759757400000, isUtc: true),
+    close: 53.52000045776367,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1759843800000, isUtc: true),
+    close: 52.654998779296875,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1759930200000, isUtc: true),
+    close: 54.439998626708984,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1760016600000, isUtc: true),
+    close: 54.224998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1760103000000, isUtc: true),
+    close: 48.53499984741211,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1760362200000, isUtc: true),
+    close: 51.6150016784668,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1760448600000, isUtc: true),
+    close: 50.564998626708984,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1760535000000, isUtc: true),
+    close: 51.599998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1760621400000, isUtc: true),
+    close: 51.025001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1760707800000, isUtc: true),
+    close: 51.994998931884766,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1760967000000, isUtc: true),
+    close: 53.94499969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1761053400000, isUtc: true),
+    close: 53.8849983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1761139800000, isUtc: true),
+    close: 52.29999923706055,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1761226200000, isUtc: true),
+    close: 53.61000061035156,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1761312600000, isUtc: true),
+    close: 55.279998779296875,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1761571800000, isUtc: true),
+    close: 58.21500015258789,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1761658200000, isUtc: true),
+    close: 59.54499816894531,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1761744600000, isUtc: true),
+    close: 60.30500030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1761831000000, isUtc: true),
+    close: 57.54499816894531,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1761917400000, isUtc: true),
+    close: 58.36000061035156,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1762180200000, isUtc: true),
+    close: 59.15999984741211,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1762266600000, isUtc: true),
+    close: 55.540000915527344,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1762353000000, isUtc: true),
+    close: 56.619998931884766,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1762439400000, isUtc: true),
+    close: 53.44499969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1762525800000, isUtc: true),
+    close: 52.88999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1762785000000, isUtc: true),
+    close: 56.35499954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1762871400000, isUtc: true),
+    close: 55.88999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1762957800000, isUtc: true),
+    close: 55.775001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1763044200000, isUtc: true),
+    close: 52.33000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1763130600000, isUtc: true),
+    close: 52.369998931884766,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1763389800000, isUtc: true),
+    close: 51.025001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1763476200000, isUtc: true),
+    close: 49.18000030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1763562600000, isUtc: true),
+    close: 50.025001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1763649000000, isUtc: true),
+    close: 46.45000076293945,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1763735400000, isUtc: true),
+    close: 47.47999954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1763994600000, isUtc: true),
+    close: 51.08000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1764081000000, isUtc: true),
+    close: 52.0099983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1764167400000, isUtc: true),
+    close: 53.369998931884766,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1764340200000, isUtc: true),
+    close: 54.540000915527344,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1764599400000, isUtc: true),
+    close: 54.04999923706055,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1764685800000, isUtc: true),
+    close: 55.29999923706055,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1764772200000, isUtc: true),
+    close: 55.689998626708984,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1764858600000, isUtc: true),
+    close: 55.5099983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1764945000000, isUtc: true),
+    close: 56.150001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1765204200000, isUtc: true),
+    close: 55.79999923706055,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1765290600000, isUtc: true),
+    close: 56.0099983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1765377000000, isUtc: true),
+    close: 56.650001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1765463400000, isUtc: true),
+    close: 56.11000061035156,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1765549800000, isUtc: true),
+    close: 52.81999969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1765809000000, isUtc: true),
+    close: 52.02000045776367,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1765895400000, isUtc: true),
+    close: 52.33000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1765981800000, isUtc: true),
+    close: 49.400001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1766068200000, isUtc: true),
+    close: 51.5099983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1766154600000, isUtc: true),
+    close: 53.52000045776367,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1766413800000, isUtc: true),
+    close: 54.25,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1766500200000, isUtc: true),
+    close: 55.0099983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1766586600000, isUtc: true),
+    close: 55.36000061035156,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1766759400000, isUtc: true),
+    close: 55.310001373291016,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1767018600000, isUtc: true),
+    close: 54.4900016784668,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1767105000000, isUtc: true),
+    close: 54.099998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1767191400000, isUtc: true),
+    close: 52.720001220703125,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1767364200000, isUtc: true),
+    close: 52.349998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1767623400000, isUtc: true),
+    close: 53.599998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1767709800000, isUtc: true),
+    close: 55.0099983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1767796200000, isUtc: true),
+    close: 55.16999816894531,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1767882600000, isUtc: true),
+    close: 54.189998626708984,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1767969000000, isUtc: true),
+    close: 55.7599983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1768228200000, isUtc: true),
+    close: 55.88999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1768314600000, isUtc: true),
+    close: 55.599998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1768401000000, isUtc: true),
+    close: 53.83000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1768487400000, isUtc: true),
+    close: 54.380001068115234,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1768573800000, isUtc: true),
+    close: 54.13999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1768919400000, isUtc: true),
+    close: 50.72999954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1769005800000, isUtc: true),
+    close: 52.72999954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1769092200000, isUtc: true),
+    close: 53.900001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1769178600000, isUtc: true),
+    close: 54.380001068115234,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1769437800000, isUtc: true),
+    close: 55.08000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1769524200000, isUtc: true),
+    close: 56.540000915527344,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1769610600000, isUtc: true),
+    close: 57.060001373291016,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1769697000000, isUtc: true),
+    close: 56.040000915527344,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1769783400000, isUtc: true),
+    close: 54.0,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1770042600000, isUtc: true),
+    close: 55.099998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1770129000000, isUtc: true),
+    close: 52.52000045776367,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1770215400000, isUtc: true),
+    close: 49.7599983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1770301800000, isUtc: true),
+    close: 47.63999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1770388200000, isUtc: true),
+    close: 50.59000015258789,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1770647400000, isUtc: true),
+    close: 51.7400016784668,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1770733800000, isUtc: true),
+    close: 51.02000045776367,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1770820200000, isUtc: true),
+    close: 51.400001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1770906600000, isUtc: true),
+    close: 48.2599983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1770993000000, isUtc: true),
+    close: 48.470001220703125,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1771338600000, isUtc: true),
+    close: 48.349998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1771425000000, isUtc: true),
+    close: 49.38999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1771511400000, isUtc: true),
+    close: 48.83000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1771597800000, isUtc: true),
+    close: 50.060001373291016,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1771857000000, isUtc: true),
+    close: 48.2400016784668,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1771943400000, isUtc: true),
+    close: 49.779998779296875,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1772029800000, isUtc: true),
+    close: 51.869998931884766,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1772116200000, isUtc: true),
+    close: 50.04999923706055,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1772202600000, isUtc: true),
+    close: 49.52000045776367,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1772461800000, isUtc: true),
+    close: 49.70000076293945,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1772548200000, isUtc: true),
+    close: 48.099998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1772634600000, isUtc: true),
+    close: 50.2599983215332,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1772721000000, isUtc: true),
+    close: 49.79999923706055,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1772807400000, isUtc: true),
+    close: 47.540000915527344,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1773063000000, isUtc: true),
+    close: 49.38999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1773149400000, isUtc: true),
+    close: 49.400001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1773235800000, isUtc: true),
+    close: 49.349998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1773322200000, isUtc: true),
+    close: 46.83000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1773408600000, isUtc: true),
+    close: 45.93000030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1773667800000, isUtc: true),
+    close: 47.459999084472656,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1773754200000, isUtc: true),
+    close: 48.15999984741211,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1773840600000, isUtc: true),
+    close: 46.099998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1773927000000, isUtc: true),
+    close: 45.689998626708984,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1774013400000, isUtc: true),
+    close: 43.08000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1774272600000, isUtc: true),
+    close: 44.56999969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1774359000000, isUtc: true),
+    close: 43.619998931884766,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1774445400000, isUtc: true),
+    close: 44.38999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1774531800000, isUtc: true),
+    close: 41.22999954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1774618200000, isUtc: true),
+    close: 38.779998779296875,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1774877400000, isUtc: true),
+    close: 37.88999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1774963800000, isUtc: true),
+    close: 41.68000030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1775050200000, isUtc: true),
+    close: 43.22999954223633,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1775136600000, isUtc: true),
+    close: 43.33000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1775482200000, isUtc: true),
+    close: 44.099998474121094,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1775568600000, isUtc: true),
+    close: 44.150001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1775655000000, isUtc: true),
+    close: 48.0,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1775741400000, isUtc: true),
+    close: 48.959999084472656,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1775827800000, isUtc: true),
+    close: 49.16999816894531,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1776087000000, isUtc: true),
+    close: 50.65999984741211,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1776173400000, isUtc: true),
+    close: 53.40999984741211,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1776259800000, isUtc: true),
+    close: 55.650001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1776346200000, isUtc: true),
+    close: 56.43000030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1776432600000, isUtc: true),
+    close: 58.59000015258789,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1776691800000, isUtc: true),
+    close: 58.08000183105469,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1776778200000, isUtc: true),
+    close: 57.400001525878906,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1776864600000, isUtc: true),
+    close: 60.209999084472656,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1776951000000, isUtc: true),
+    close: 59.220001220703125,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1777037400000, isUtc: true),
+    close: 62.560001373291016,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1777296600000, isUtc: true),
+    close: 62.63999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1777383000000, isUtc: true),
+    close: 60.7400016784668,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1777469400000, isUtc: true),
+    close: 61.86000061035156,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1777555800000, isUtc: true),
+    close: 63.540000915527344,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1777642200000, isUtc: true),
+    close: 65.30000305175781,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1777901400000, isUtc: true),
+    close: 64.91000366210938,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1777987800000, isUtc: true),
+    close: 67.38999938964844,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1778074200000, isUtc: true),
+    close: 71.56999969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1778160600000, isUtc: true),
+    close: 71.33999633789062,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1778247000000, isUtc: true),
+    close: 76.27999877929688,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1778506200000, isUtc: true),
+    close: 76.95999908447266,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1778592600000, isUtc: true),
+    close: 74.95999908447266,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1778679000000, isUtc: true),
+    close: 77.23999786376953,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1778765400000, isUtc: true),
+    close: 78.94999694824219,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1778851800000, isUtc: true),
+    close: 75.33999633789062,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1779111000000, isUtc: true),
+    close: 74.31999969482422,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1779197400000, isUtc: true),
+    close: 72.93000030517578,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1779283800000, isUtc: true),
+    close: 76.51000213623047,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1779370200000, isUtc: true),
+    close: 76.94999694824219,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1779456600000, isUtc: true),
+    close: 77.83999633789062,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1779802200000, isUtc: true),
+    close: 81.94999694824219,
+  ),
+  PriceBar(
+    date: DateTime.fromMillisecondsSinceEpoch(1779888600000, isUtc: true),
+    close: 81.66999816894531,
+  ),
 ];

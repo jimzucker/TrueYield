@@ -1,4 +1,4 @@
-# iYield session log
+# TrueYield session log
 
 Tracks elapsed time per build session. Append a row per session; close it out when the user signals the session is done.
 
@@ -11,3 +11,5 @@ Tracks elapsed time per build session. Append a row per session; close it out wh
 | v2.3 | 2026-05-25 | ~10 min (same day) | tightened input + output so everything fits on one iPhone screen: three tax-rate fields side-by-side, dense field decoration, smaller hero font, denser table row padding; pushed to GitHub |
 | v2.4 | 2026-05-25 | ~10 min (same day) | rebalanced after v2.3 left empty space at the bottom — shortened tax-rate labels to fit the 3-column row, bumped hero values to `displaySmall`, table rows to `bodyLarge`, increased top padding so the form breathes; updated widget tests for the new short labels |
 | v2.5 | 2026-05-26 | ~15 min | fix: switched Yahoo Finance interval from `1mo` to `1d` so weekly distributions aren't bucketed (YMAG went from 13 entries to 53); renamed `MonthlyClose`/`monthStart`/`monthlyCloses` → `PriceBar`/`date`/`priceBars` to match the new bar granularity; relabeled Prices tab from "Monthly closes"/"Month" to "Daily closes"/"Date" using `_fmtDate`; dropped the unused `_fmtMonth` helper; updated 20-test suite to use the new names (math is bar-shape agnostic so YMAG fixture still validates correctness) |
+| rename | 2026-05-28 | — | renamed iYield → TrueYield across all platforms (display name, Dart package `true_yield`, bundle id `com.ijazsoftware.trueyield`, kotlin source dir); standardized copyright to `James A. Zucker`; added GitHub Actions CI (`.github/workflows/ci.yml`) running format + analyze + test, plus the same pre-commit hook; original "TY" launcher icons across all platforms; rewrote README for a prospective user |
+| integrate | 2026-05-28 | — | merged the ROC / total-return + daily-bar model from `main` into the rename branch; re-applied the rename and the testable seams (injectable `http.Client` + pure `parseYahooChart`) on top of the new model; ported the widget-flow, parser, fixture, and format tests to the new `PriceBar`/ROC API; refreshed README + TEST_REPORT for the new model |

@@ -1,4 +1,4 @@
-// Copyright 2026 Jim Zucker
+// Copyright 2026 James A. Zucker
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,26 +20,23 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  runApp(const IYieldApp());
+  runApp(const TrueYieldApp());
 }
 
-class IYieldApp extends StatelessWidget {
-  const IYieldApp({super.key});
+class TrueYieldApp extends StatelessWidget {
+  const TrueYieldApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'iYield',
+      title: 'TrueYield',
       themeMode: ThemeMode.dark,
       darkTheme: ThemeData(
         colorSchemeSeed: Colors.indigo,
         brightness: Brightness.dark,
         useMaterial3: true,
       ),
-      theme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
-        useMaterial3: true,
-      ),
+      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
       home: const YieldScreen(),
     );
   }
@@ -283,8 +280,97 @@ class YieldMath {
   }
 }
 
+/// Parses a Yahoo Finance chart JSON [responseBody] into a [YieldResult].
+///
+/// Pure: no network and no clock, so it is exercised directly in tests with
+/// canned payloads. Throws a human-readable [String] on an API error envelope,
+/// empty results, or a missing current price.
+YieldResult parseYahooChart(
+  String responseBody, {
+  required String ticker,
+  required double federalPct,
+  required double statePct,
+  required double localPct,
+  double rocPct = 0,
+}) {
+  final body = json.decode(responseBody) as Map<String, dynamic>;
+  final chart = body['chart'] as Map<String, dynamic>?;
+  final err = chart?['error'];
+  if (err != null) {
+    throw err is Map ? (err['description'] ?? err.toString()) : err.toString();
+  }
+  final results = chart?['result'] as List<dynamic>?;
+  if (results == null || results.isEmpty) {
+    throw 'No data for "$ticker".';
+  }
+  final r0 = results.first as Map<String, dynamic>;
+  final meta = r0['meta'] as Map<String, dynamic>?;
+  final price = (meta?['regularMarketPrice'] as num?)?.toDouble();
+  if (price == null) {
+    throw 'Missing current price for "$ticker".';
+  }
+
+  final timestamps =
+      (r0['timestamp'] as List<dynamic>?)
+          ?.map((e) => (e as num).toInt())
+          .toList() ??
+      const <int>[];
+  final closes =
+      ((r0['indicators']?['quote'] as List<dynamic>?)?.first
+              as Map<String, dynamic>?)?['close']
+          as List<dynamic>? ??
+      const [];
+
+  final priceBars = <PriceBar>[
+    for (int i = 0; i < timestamps.length; i++)
+      PriceBar(
+        date: DateTime.fromMillisecondsSinceEpoch(
+          timestamps[i] * 1000,
+          isUtc: true,
+        ),
+        close: (i < closes.length && closes[i] is num)
+            ? (closes[i] as num).toDouble()
+            : null,
+      ),
+  ];
+
+  final events = r0['events'] as Map<String, dynamic>?;
+  final dividends = events?['dividends'] as Map<String, dynamic>?;
+  final distributionList = <DistributionEntry>[];
+  if (dividends != null) {
+    for (final entry in dividends.values) {
+      final m = entry as Map<String, dynamic>;
+      final amt = (m['amount'] as num?)?.toDouble();
+      final divTs = (m['date'] as num?)?.toInt();
+      if (amt == null || divTs == null) continue;
+      distributionList.add(
+        DistributionEntry(
+          date: DateTime.fromMillisecondsSinceEpoch(divTs * 1000, isUtc: true),
+          amount: amt,
+        ),
+      );
+    }
+  }
+
+  return YieldMath.compute(
+    ticker: ticker,
+    currentPrice: price,
+    federalPct: federalPct,
+    statePct: statePct,
+    localPct: localPct,
+    distributions: distributionList,
+    priceBars: priceBars,
+    rocPct: rocPct,
+  );
+}
+
 class YieldScreen extends StatefulWidget {
-  const YieldScreen({super.key});
+  /// Optional HTTP client seam. Production leaves this null and a one-shot
+  /// client is created per request; tests inject a mock to drive the
+  /// Calculate → parse → render flow without real network access.
+  final http.Client? client;
+
+  const YieldScreen({super.key, this.client});
 
   @override
   State<YieldScreen> createState() => _YieldScreenState();
@@ -426,78 +512,32 @@ class _YieldScreenState extends State<YieldScreen> {
     required double rocPct,
   }) async {
     final uri = Uri.parse(
-        'https://query2.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d&range=1y&events=div');
-    final resp = await http.get(uri, headers: {
-      'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
-    });
-    if (resp.statusCode != 200) {
-      throw 'HTTP ${resp.statusCode}';
-    }
-    final body = json.decode(resp.body) as Map<String, dynamic>;
-    final chart = body['chart'] as Map<String, dynamic>?;
-    final err = chart?['error'];
-    if (err != null) {
-      throw err is Map ? (err['description'] ?? err.toString()) : err.toString();
-    }
-    final results = chart?['result'] as List<dynamic>?;
-    if (results == null || results.isEmpty) {
-      throw 'No data for "$ticker".';
-    }
-    final r0 = results.first as Map<String, dynamic>;
-    final meta = r0['meta'] as Map<String, dynamic>?;
-    final price = (meta?['regularMarketPrice'] as num?)?.toDouble();
-    if (price == null) {
-      throw 'Missing current price for "$ticker".';
-    }
-
-    final timestamps = (r0['timestamp'] as List<dynamic>?)
-            ?.map((e) => (e as num).toInt())
-            .toList() ??
-        const <int>[];
-    final closes = ((r0['indicators']?['quote'] as List<dynamic>?)
-                ?.first as Map<String, dynamic>?)?['close']
-            as List<dynamic>? ??
-        const [];
-
-    final priceBars = <PriceBar>[
-      for (int i = 0; i < timestamps.length; i++)
-        PriceBar(
-          date: DateTime.fromMillisecondsSinceEpoch(
-              timestamps[i] * 1000,
-              isUtc: true),
-          close: (i < closes.length && closes[i] is num)
-              ? (closes[i] as num).toDouble()
-              : null,
-        ),
-    ];
-
-    final events = r0['events'] as Map<String, dynamic>?;
-    final dividends = events?['dividends'] as Map<String, dynamic>?;
-    final distributionList = <DistributionEntry>[];
-    if (dividends != null) {
-      for (final entry in dividends.values) {
-        final m = entry as Map<String, dynamic>;
-        final amt = (m['amount'] as num?)?.toDouble();
-        final divTs = (m['date'] as num?)?.toInt();
-        if (amt == null || divTs == null) continue;
-        distributionList.add(DistributionEntry(
-          date: DateTime.fromMillisecondsSinceEpoch(divTs * 1000, isUtc: true),
-          amount: amt,
-        ));
-      }
-    }
-
-    return YieldMath.compute(
-      ticker: ticker,
-      currentPrice: price,
-      federalPct: federalPct,
-      statePct: statePct,
-      localPct: localPct,
-      distributions: distributionList,
-      priceBars: priceBars,
-      rocPct: rocPct,
+      'https://query2.finance.yahoo.com/v8/finance/chart/$ticker?interval=1d&range=1y&events=div',
     );
+    final client = widget.client ?? http.Client();
+    try {
+      final resp = await client.get(
+        uri,
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
+        },
+      );
+      if (resp.statusCode != 200) {
+        throw 'HTTP ${resp.statusCode}';
+      }
+      return parseYahooChart(
+        resp.body,
+        ticker: ticker,
+        federalPct: federalPct,
+        statePct: statePct,
+        localPct: localPct,
+        rocPct: rocPct,
+      );
+    } finally {
+      // Only dispose clients we created; never close an injected one.
+      if (widget.client == null) client.close();
+    }
   }
 
   @override
@@ -506,7 +546,7 @@ class _YieldScreenState extends State<YieldScreen> {
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('iYield'),
+          title: const Text('TrueYield'),
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Calculate'),
@@ -531,8 +571,7 @@ class _YieldScreenState extends State<YieldScreen> {
   Widget _buildCalculateTab(BuildContext context) {
     const fieldDecoration = InputDecoration(
       border: OutlineInputBorder(),
-      contentPadding:
-          EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
     );
     return SingleChildScrollView(
       controller: _scrollCtrl,
@@ -548,10 +587,11 @@ class _YieldScreenState extends State<YieldScreen> {
                 child: TextField(
                   controller: _tickerCtrl,
                   style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
                   decoration: fieldDecoration.copyWith(
                     labelText: 'Ticker',
                     filled: true,
@@ -574,9 +614,11 @@ class _YieldScreenState extends State<YieldScreen> {
                   controller: _rocCtrl,
                   style: const TextStyle(fontSize: 18),
                   decoration: fieldDecoration.copyWith(
-                      labelText: 'Return of capital %'),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                    labelText: 'Return of capital %',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   onTap: () => _selectAll(_rocCtrl),
                 ),
               ),
@@ -591,8 +633,9 @@ class _YieldScreenState extends State<YieldScreen> {
                   controller: _federalCtrl,
                   style: const TextStyle(fontSize: 18),
                   decoration: fieldDecoration.copyWith(labelText: 'Federal %'),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   onTap: () => _selectAll(_federalCtrl),
                 ),
               ),
@@ -602,8 +645,9 @@ class _YieldScreenState extends State<YieldScreen> {
                   controller: _stateCtrl,
                   style: const TextStyle(fontSize: 18),
                   decoration: fieldDecoration.copyWith(labelText: 'State %'),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   onTap: () => _selectAll(_stateCtrl),
                 ),
               ),
@@ -613,8 +657,9 @@ class _YieldScreenState extends State<YieldScreen> {
                   controller: _localCtrl,
                   style: const TextStyle(fontSize: 18),
                   decoration: fieldDecoration.copyWith(labelText: 'Local %'),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   onTap: () => _selectAll(_localCtrl),
                 ),
               ),
@@ -631,9 +676,13 @@ class _YieldScreenState extends State<YieldScreen> {
                       width: 22,
                       child: CircularProgressIndicator(strokeWidth: 2.5),
                     )
-                  : const Text('Calculate',
+                  : const Text(
+                      'Calculate',
                       style: TextStyle(
-                          fontSize: 17, fontWeight: FontWeight.w600)),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 16),
@@ -692,15 +741,20 @@ class _ResultCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Current price'),
-                  Text(_money(r.currentPrice),
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    _money(r.currentPrice),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
-              Text('Does not qualify (${r.reason})',
-                  style: TextStyle(
-                      color: theme.colorScheme.error,
-                      fontWeight: FontWeight.bold)),
+              Text(
+                'Does not qualify (${r.reason})',
+                style: TextStyle(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ],
           ),
         ),
@@ -730,7 +784,8 @@ class _ResultCard extends StatelessWidget {
             //     sum to it nested beneath (income + unrealized G/L − tax).
             _StmtRow(
               label: 'Total return after tax',
-              sub: '${_money(r.startPrice)} → ${_money(afterTaxValue)} on your start',
+              sub:
+                  '${_money(r.startPrice)} → ${_money(afterTaxValue)} on your start',
               value: _signedPct(r.totalReturnAfterTax),
               valueColor: _signColor(r.totalReturnAfterTax),
               headline: true,
@@ -738,7 +793,8 @@ class _ResultCard extends StatelessWidget {
             const SizedBox(height: 10),
             _StmtRow(
               label: 'Income (taxable)',
-              sub: '${_money(r.sumDistributions)} × '
+              sub:
+                  '${_money(r.sumDistributions)} × '
                   '${(100 - r.rocPct).toStringAsFixed(0)}% (1−ROC)',
               value: _signedMoney(r.incomeAmount),
               valueColor: _gain,
@@ -753,7 +809,8 @@ class _ResultCard extends StatelessWidget {
             ),
             _StmtRow(
               label: 'Tax this year',
-              sub: '${(r.combinedRate * 100).toStringAsFixed(0)}% on the '
+              sub:
+                  '${(r.combinedRate * 100).toStringAsFixed(0)}% on the '
                   '${_money(r.incomeAmount)} income',
               value: _signedMoney(-r.taxThisYear),
               valueColor: _loss,
@@ -771,7 +828,8 @@ class _ResultCard extends StatelessWidget {
             const SizedBox(height: 8),
             _StmtRow(
               label: 'After-tax yield',
-              sub: 'kept ${_money(r.sumDistributions - r.taxThisYear)} ÷ '
+              sub:
+                  'kept ${_money(r.sumDistributions - r.taxThisYear)} ÷ '
                   '${_money(r.currentPrice)}',
               value: _pctPlain(r.afterTaxYieldRoc),
             ),
@@ -805,8 +863,7 @@ class _StatusChip extends StatelessWidget {
       ),
       child: Text(
         isOk ? 'Qualifies' : 'Does not qualify',
-        style: TextStyle(
-            color: fg, fontWeight: FontWeight.w700, fontSize: 12),
+        style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12),
       ),
     );
   }
@@ -837,18 +894,23 @@ class _StmtRow extends StatelessWidget {
     final labelStyle = headline
         ? theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)
         : theme.textTheme.titleSmall?.copyWith(
-            fontWeight: nested ? FontWeight.w500 : FontWeight.w600);
-    final valueStyle = (headline
-            ? theme.textTheme.headlineMedium
-            : theme.textTheme.titleMedium)
-        ?.copyWith(
-      color: valueColor ?? theme.colorScheme.onSurface,
-      fontWeight: FontWeight.w700,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
+            fontWeight: nested ? FontWeight.w500 : FontWeight.w600,
+          );
+    final valueStyle =
+        (headline
+                ? theme.textTheme.headlineMedium
+                : theme.textTheme.titleMedium)
+            ?.copyWith(
+              color: valueColor ?? theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            );
     return Padding(
       padding: EdgeInsets.only(
-          left: nested ? 16 : 0, top: nested ? 3 : 0, bottom: nested ? 3 : 0),
+        left: nested ? 16 : 0,
+        top: nested ? 3 : 0,
+        bottom: nested ? 3 : 0,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -858,9 +920,12 @@ class _StmtRow extends StatelessWidget {
               children: [
                 Text(label, style: labelStyle),
                 if (sub != null)
-                  Text(sub!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
+                  Text(
+                    sub!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -884,7 +949,7 @@ class _ReferenceGrid extends StatelessWidget {
 
   static const _months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
   String _monthLabel(DateTime d) =>
       "${_months[d.month - 1]} '${(d.year % 100).toString().padLeft(2, '0')}";
@@ -897,30 +962,36 @@ class _ReferenceGrid extends StatelessWidget {
     final startLabel = bars.isNotEmpty ? _monthLabel(bars.first.date) : 'Start';
     final endLabel = bars.isNotEmpty ? _monthLabel(bars.last.date) : 'Now';
 
-    final headStyle = theme.textTheme.labelSmall
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final headStyle = theme.textTheme.labelSmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     final labelStyle = theme.textTheme.bodyMedium;
     final numStyle = theme.textTheme.bodyMedium?.copyWith(
-        fontWeight: FontWeight.w600,
-        fontFeatures: const [FontFeature.tabularFigures()]);
+      fontWeight: FontWeight.w600,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
 
     TableRow row(String label, String start, String end, {Color? endColor}) {
-      return TableRow(children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 5),
-          child: Text(label, style: labelStyle),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
-          child: Text(start, textAlign: TextAlign.right, style: numStyle),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 5),
-          child: Text(end,
+      return TableRow(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Text(label, style: labelStyle),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
+            child: Text(start, textAlign: TextAlign.right, style: numStyle),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Text(
+              end,
               textAlign: TextAlign.right,
-              style: numStyle?.copyWith(color: endColor)),
-        ),
-      ]);
+              style: numStyle?.copyWith(color: endColor),
+            ),
+          ),
+        ],
+      );
     }
 
     return Table(
@@ -931,24 +1002,36 @@ class _ReferenceGrid extends StatelessWidget {
       },
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
-        TableRow(children: [
-          const SizedBox(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(startLabel,
-                textAlign: TextAlign.right, style: headStyle),
-          ),
-          Text(endLabel, textAlign: TextAlign.right, style: headStyle),
-        ]),
+        TableRow(
+          children: [
+            const SizedBox(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                startLabel,
+                textAlign: TextAlign.right,
+                style: headStyle,
+              ),
+            ),
+            Text(endLabel, textAlign: TextAlign.right, style: headStyle),
+          ],
+        ),
         row('Price', _money(r.startPrice), _money(r.currentPrice)),
         row('Shares', '1.00', r.dripShares.toStringAsFixed(2)),
-        row('Present Value (price × shares)', _money(r.startPrice),
-            _money(r.nav)),
+        row(
+          'Present Value (price × shares)',
+          _money(r.startPrice),
+          _money(r.nav),
+        ),
         row('Cost basis', _money(r.startPrice), _money(r.costBasis)),
-        row('Unrealized G/L', '—', _signedMoney(r.unrealizedGL),
-            endColor: r.unrealizedGL < 0
-                ? Colors.redAccent.shade200
-                : Colors.greenAccent.shade400),
+        row(
+          'Unrealized G/L',
+          '—',
+          _signedMoney(r.unrealizedGL),
+          endColor: r.unrealizedGL < 0
+              ? Colors.redAccent.shade200
+              : Colors.greenAccent.shade400,
+        ),
       ],
     );
   }
@@ -972,8 +1055,9 @@ class _DistributionsTab extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-              'Run Calculate to populate.',
-              textAlign: TextAlign.center),
+            'Run Calculate to populate.',
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
@@ -996,10 +1080,12 @@ class _DistributionsTab extends StatelessWidget {
     final rocAmount = total - r.incomeAmount;
     final rocInt = r.rocPct.round();
     final incInt = (100 - r.rocPct).round();
-    final splitHeadStyle = theme.textTheme.labelMedium
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    final splitNumStyle =
-        theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
+    final splitHeadStyle = theme.textTheme.labelMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final splitNumStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: r.distributions.length + 3,
@@ -1032,45 +1118,78 @@ class _DistributionsTab extends StatelessWidget {
                   },
                   defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                   children: [
-                    TableRow(children: [
-                      const SizedBox(),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text('Return of cap. ($rocInt%)',
-                            textAlign: TextAlign.right, style: splitHeadStyle),
-                      ),
-                      Text('Income ($incInt%)',
-                          textAlign: TextAlign.right, style: splitHeadStyle),
-                    ]),
-                    TableRow(children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Text('Amount', style: theme.textTheme.bodyMedium),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 4, horizontal: 10),
-                        child: Text('\$${rocAmount.toStringAsFixed(2)}',
-                            textAlign: TextAlign.right, style: splitNumStyle),
-                      ),
-                      Text('\$${r.incomeAmount.toStringAsFixed(2)}',
-                          textAlign: TextAlign.right, style: splitNumStyle),
-                    ]),
-                    TableRow(children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Text('Taxed now?',
-                            style: theme.textTheme.bodyMedium),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 4, horizontal: 10),
-                        child: Text('No',
-                            textAlign: TextAlign.right, style: splitNumStyle),
-                      ),
-                      Text('Yes (\$${r.taxThisYear.toStringAsFixed(2)})',
-                          textAlign: TextAlign.right, style: splitNumStyle),
-                    ]),
+                    TableRow(
+                      children: [
+                        const SizedBox(),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            'Return of cap. ($rocInt%)',
+                            textAlign: TextAlign.right,
+                            style: splitHeadStyle,
+                          ),
+                        ),
+                        Text(
+                          'Income ($incInt%)',
+                          textAlign: TextAlign.right,
+                          style: splitHeadStyle,
+                        ),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            'Amount',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 10,
+                          ),
+                          child: Text(
+                            '\$${rocAmount.toStringAsFixed(2)}',
+                            textAlign: TextAlign.right,
+                            style: splitNumStyle,
+                          ),
+                        ),
+                        Text(
+                          '\$${r.incomeAmount.toStringAsFixed(2)}',
+                          textAlign: TextAlign.right,
+                          style: splitNumStyle,
+                        ),
+                      ],
+                    ),
+                    TableRow(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            'Taxed now?',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 10,
+                          ),
+                          child: Text(
+                            'No',
+                            textAlign: TextAlign.right,
+                            style: splitNumStyle,
+                          ),
+                        ),
+                        Text(
+                          'Yes (\$${r.taxThisYear.toStringAsFixed(2)})',
+                          textAlign: TextAlign.right,
+                          style: splitNumStyle,
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ],
@@ -1083,12 +1202,18 @@ class _DistributionsTab extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Date',
-                    style: theme.textTheme.labelLarge
-                        ?.copyWith(fontWeight: FontWeight.w600)),
-                Text('Amount',
-                    style: theme.textTheme.labelLarge
-                        ?.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  'Date',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Amount',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           );
@@ -1099,12 +1224,18 @@ class _DistributionsTab extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Total (12mo)',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600)),
-                Text('\$${total.toStringAsFixed(4)}',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  'Total (12mo)',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  '\$${total.toStringAsFixed(4)}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           );
@@ -1136,36 +1267,29 @@ class _PricesTab extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text('Run Calculate to populate.',
-              textAlign: TextAlign.center),
+          child: Text(
+            'Run Calculate to populate.',
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
-    final closes = [...r.priceBars]
-      ..sort((a, b) => b.date.compareTo(a.date));
+    final closes = [...r.priceBars]..sort((a, b) => b.date.compareTo(a.date));
     if (closes.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text('No daily closes returned.',
-              textAlign: TextAlign.center),
+          child: Text('No daily closes returned.', textAlign: TextAlign.center),
         ),
       );
     }
     final theme = Theme.of(context);
-    final valid = closes
-        .map((c) => c.close)
-        .whereType<double>()
-        .toList();
+    final valid = closes.map((c) => c.close).whereType<double>().toList();
     final mean = valid.isEmpty
         ? 0
         : valid.reduce((a, b) => a + b) / valid.length;
-    final hi = valid.isEmpty
-        ? 0
-        : valid.reduce((a, b) => a > b ? a : b);
-    final lo = valid.isEmpty
-        ? 0
-        : valid.reduce((a, b) => a < b ? a : b);
+    final hi = valid.isEmpty ? 0 : valid.reduce((a, b) => a > b ? a : b);
+    final lo = valid.isEmpty ? 0 : valid.reduce((a, b) => a < b ? a : b);
     final last = closes.first.date;
     final first = closes.last.date;
     final pctChange = (valid.length >= 2)
@@ -1207,12 +1331,18 @@ class _PricesTab extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Date',
-                    style: theme.textTheme.labelLarge
-                        ?.copyWith(fontWeight: FontWeight.w600)),
-                Text('Close',
-                    style: theme.textTheme.labelLarge
-                        ?.copyWith(fontWeight: FontWeight.w600)),
+                Text(
+                  'Date',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Close',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           );
@@ -1224,9 +1354,7 @@ class _PricesTab extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(_fmtDate(c.date)),
-              Text(c.close == null
-                  ? '—'
-                  : '\$${c.close!.toStringAsFixed(2)}'),
+              Text(c.close == null ? '—' : '\$${c.close!.toStringAsFixed(2)}'),
             ],
           ),
         );

@@ -1,7 +1,7 @@
-iYield
-Copyright 2026 Jim Zucker
+TrueYield
+Copyright 2026 James A. Zucker
 
-This product includes software developed by Jim Zucker.
+This product includes software developed by James A. Zucker.
 
 Licensed under the Apache License, Version 2.0 (the "License").
 You may obtain a copy of the License at:
@@ -27,5 +27,5 @@ This product uses the following third-party components:
 Data:
 
   - Quote and dividend data are fetched at runtime from Yahoo Finance's
-    public unofficial chart endpoint. iYield does not redistribute that
+    public unofficial chart endpoint. TrueYield does not redistribute that
     data; it queries and displays it per-user, per-request.

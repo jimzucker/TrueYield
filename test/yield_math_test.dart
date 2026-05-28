@@ -1,4 +1,4 @@
-// Copyright 2026 Jim Zucker
+// Copyright 2026 James A. Zucker
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:iyield/main.dart';
+import 'package:true_yield/main.dart';
 
 import 'fixtures/tqqq_2026_05_27.dart';
 import 'fixtures/ymag_2026_05_27.dart' as ymag_daily;
@@ -35,12 +35,18 @@ void _expectInvariants(YieldResult r, {required double rocPct}) {
   expect(r.taxThisYear, closeTo(r.incomeAmount * r.combinedRate, _eps));
   expect(r.costBasis, closeTo(r.startPrice + r.incomeAmount, _eps));
   expect(r.unrealizedGL, closeTo(r.nav - r.costBasis, _eps));
-  expect(r.afterTaxYieldRoc,
-      closeTo((r.sumDistributions - r.taxThisYear) / r.currentPrice, _eps));
-  expect(r.totalReturnBeforeTax,
-      closeTo((r.nav - r.startPrice) / r.startPrice, _eps));
-  expect(r.totalReturnAfterTax,
-      closeTo((r.nav - r.taxThisYear - r.startPrice) / r.startPrice, _eps));
+  expect(
+    r.afterTaxYieldRoc,
+    closeTo((r.sumDistributions - r.taxThisYear) / r.currentPrice, _eps),
+  );
+  expect(
+    r.totalReturnBeforeTax,
+    closeTo((r.nav - r.startPrice) / r.startPrice, _eps),
+  );
+  expect(
+    r.totalReturnAfterTax,
+    closeTo((r.nav - r.taxThisYear - r.startPrice) / r.startPrice, _eps),
+  );
 }
 
 void main() {
@@ -68,8 +74,10 @@ void main() {
       expect(result.qualifies, isTrue);
       expect(result.sumDistributions, closeTo(2.00, _eps));
       expect(result.grossYield, closeTo(0.02, _eps));
-      expect(result.compoundedGrossYield,
-          closeTo((1 + 0.01) * (1 + 0.01) - 1, _eps));
+      expect(
+        result.compoundedGrossYield,
+        closeTo((1 + 0.01) * (1 + 0.01) - 1, _eps),
+      );
       expect(result.compoundedGrossYield, greaterThan(result.grossYield));
       expect(result.dripShares, closeTo((1 + 0.01) * (1 + 0.01), _eps));
       // Flat price + DRIP: the only "gain" is the compounding of reinvested
@@ -86,9 +94,7 @@ void main() {
         federalPct: 32,
         statePct: 5,
         localPct: 0,
-        distributions: [
-          DistributionEntry(date: _utc(2025, 7, 15), amount: 10),
-        ],
+        distributions: [DistributionEntry(date: _utc(2025, 7, 15), amount: 10)],
         priceBars: [
           for (int m = 0; m < 13; m++)
             PriceBar(date: _utc(2025, 6 + m), close: 100),
@@ -105,9 +111,7 @@ void main() {
         federalPct: 32,
         statePct: 5,
         localPct: 0,
-        distributions: [
-          DistributionEntry(date: _utc(2025, 7, 15), amount: 10),
-        ],
+        distributions: [DistributionEntry(date: _utc(2025, 7, 15), amount: 10)],
         priceBars: [
           for (int m = 0; m < 13; m++)
             PriceBar(date: _utc(2025, 6 + m), close: 100),
@@ -127,9 +131,7 @@ void main() {
         federalPct: 0,
         statePct: 0,
         localPct: 0,
-        distributions: [
-          DistributionEntry(date: _utc(2025, 12, 15), amount: 5),
-        ],
+        distributions: [DistributionEntry(date: _utc(2025, 12, 15), amount: 5)],
         priceBars: [
           PriceBar(date: _utc(2025, 6), close: 100),
           PriceBar(date: _utc(2025, 12), close: 90),
@@ -150,9 +152,7 @@ void main() {
         federalPct: 0,
         statePct: 0,
         localPct: 0,
-        distributions: [
-          DistributionEntry(date: _utc(2025, 12, 15), amount: 5),
-        ],
+        distributions: [DistributionEntry(date: _utc(2025, 12, 15), amount: 5)],
         priceBars: [
           PriceBar(date: _utc(2025, 6), close: 80),
           PriceBar(date: _utc(2025, 12), close: 90),
@@ -326,34 +326,58 @@ void main() {
       for (final r in [ymag, tqqq]) {
         final afterTaxValue = r.nav - r.taxThisYear;
         buf
-          ..writeln('Statement (validated) — ${r.ticker}'
-              '  [roc ${r.rocPct.toStringAsFixed(0)}%, tax '
-              '${(r.combinedRate * 100).toStringAsFixed(0)}%]')
+          ..writeln(
+            'Statement (validated) — ${r.ticker}'
+            '  [roc ${r.rocPct.toStringAsFixed(0)}%, tax '
+            '${(r.combinedRate * 100).toStringAsFixed(0)}%]',
+          )
           ..writeln('-' * 56)
-          ..writeln('${'Total return after tax'.padRight(34)}'
-              '${pct(r.totalReturnAfterTax).padLeft(12)}')
+          ..writeln(
+            '${'Total return after tax'.padRight(34)}'
+            '${pct(r.totalReturnAfterTax).padLeft(12)}',
+          )
           ..writeln('  ${money(r.startPrice)} → ${money(afterTaxValue)}')
-          ..writeln('${'  Income (taxable)'.padRight(34)}'
-              '${signed(r.incomeAmount).padLeft(12)}')
-          ..writeln('${'  Unrealized G/L'.padRight(34)}'
-              '${signed(r.unrealizedGL).padLeft(12)}')
-          ..writeln('${'  Tax this year'.padRight(34)}'
-              '${signed(-r.taxThisYear).padLeft(12)}')
-          ..writeln('${'Advertised yield'.padRight(34)}'
-              '${plain(r.grossYield).padLeft(12)}')
-          ..writeln('${'After-tax yield'.padRight(34)}'
-              '${plain(r.afterTaxYieldRoc).padLeft(12)}')
+          ..writeln(
+            '${'  Income (taxable)'.padRight(34)}'
+            '${signed(r.incomeAmount).padLeft(12)}',
+          )
+          ..writeln(
+            '${'  Unrealized G/L'.padRight(34)}'
+            '${signed(r.unrealizedGL).padLeft(12)}',
+          )
+          ..writeln(
+            '${'  Tax this year'.padRight(34)}'
+            '${signed(-r.taxThisYear).padLeft(12)}',
+          )
+          ..writeln(
+            '${'Advertised yield'.padRight(34)}'
+            '${plain(r.grossYield).padLeft(12)}',
+          )
+          ..writeln(
+            '${'After-tax yield'.padRight(34)}'
+            '${plain(r.afterTaxYieldRoc).padLeft(12)}',
+          )
           ..writeln('Reference                         start          now')
-          ..writeln('${'  Price'.padRight(28)}'
-              '${money(r.startPrice).padLeft(12)}${money(r.currentPrice).padLeft(13)}')
-          ..writeln('${'  Shares'.padRight(28)}'
-              '${'1.00'.padLeft(12)}${r.dripShares.toStringAsFixed(2).padLeft(13)}')
-          ..writeln('${'  Present Value'.padRight(28)}'
-              '${money(r.startPrice).padLeft(12)}${money(r.nav).padLeft(13)}')
-          ..writeln('${'  Cost basis'.padRight(28)}'
-              '${money(r.startPrice).padLeft(12)}${money(r.costBasis).padLeft(13)}')
-          ..writeln('${'  Unrealized G/L'.padRight(28)}'
-              '${'—'.padLeft(12)}${signed(r.unrealizedGL).padLeft(13)}')
+          ..writeln(
+            '${'  Price'.padRight(28)}'
+            '${money(r.startPrice).padLeft(12)}${money(r.currentPrice).padLeft(13)}',
+          )
+          ..writeln(
+            '${'  Shares'.padRight(28)}'
+            '${'1.00'.padLeft(12)}${r.dripShares.toStringAsFixed(2).padLeft(13)}',
+          )
+          ..writeln(
+            '${'  Present Value'.padRight(28)}'
+            '${money(r.startPrice).padLeft(12)}${money(r.nav).padLeft(13)}',
+          )
+          ..writeln(
+            '${'  Cost basis'.padRight(28)}'
+            '${money(r.startPrice).padLeft(12)}${money(r.costBasis).padLeft(13)}',
+          )
+          ..writeln(
+            '${'  Unrealized G/L'.padRight(28)}'
+            '${'—'.padLeft(12)}${signed(r.unrealizedGL).padLeft(13)}',
+          )
           ..writeln();
       }
       // ignore: avoid_print
@@ -393,9 +417,7 @@ void main() {
         federalPct: 0,
         statePct: 0,
         localPct: 0,
-        distributions: [
-          DistributionEntry(date: _utc(2025, 12, 15), amount: 5),
-        ],
+        distributions: [DistributionEntry(date: _utc(2025, 12, 15), amount: 5)],
         priceBars: [
           PriceBar(date: _utc(2025, 6), close: null),
           PriceBar(date: _utc(2026, 5), close: null),
@@ -415,12 +437,8 @@ void main() {
         federalPct: 0,
         statePct: 0,
         localPct: 0,
-        distributions: [
-          DistributionEntry(date: _utc(2025, 12, 15), amount: 4),
-        ],
-        priceBars: [
-          PriceBar(date: _utc(2025, 12), close: 100),
-        ],
+        distributions: [DistributionEntry(date: _utc(2025, 12, 15), amount: 4)],
+        priceBars: [PriceBar(date: _utc(2025, 12), close: 100)],
       );
       expect(result.grossYield, closeTo(0.04, _eps));
       expect(result.compoundedGrossYield, closeTo(0.04, _eps));
@@ -452,6 +470,122 @@ void main() {
         PriceBar(date: _utc(2025, 12), close: null),
       ];
       expect(YieldMath.priceAt(_utc(2025, 12, 15), bars), 10);
+    });
+    test(
+      'priceAt walks forward when the start bar and earlier bars are null',
+      () {
+        // Date precedes all bars (barIndexAt == -1 → start 0); bar[0] is null,
+        // so the forward walk returns the first later non-null close.
+        final bars = [
+          PriceBar(date: _utc(2025, 6), close: null),
+          PriceBar(date: _utc(2025, 9), close: 20),
+        ];
+        expect(YieldMath.priceAt(_utc(2025, 5, 1), bars), 20);
+      },
+    );
+    test('priceAt returns null when every bar is null', () {
+      final bars = [
+        PriceBar(date: _utc(2025, 6), close: null),
+        PriceBar(date: _utc(2025, 9), close: null),
+      ];
+      expect(YieldMath.priceAt(_utc(2025, 7, 1), bars), isNull);
+    });
+  });
+
+  group('YieldMath.compute — additional edge cases', () {
+    test(
+      'distribution dated before the first bar uses the first bar price',
+      () {
+        // priceAt falls back to the first available bar (50), not currentPrice
+        // (100): DRIP factor = 1 + 5/50 = 1.10, distinguishing the two paths.
+        final r = YieldMath.compute(
+          ticker: 'EARLY',
+          currentPrice: 100,
+          federalPct: 0,
+          statePct: 0,
+          localPct: 0,
+          distributions: [DistributionEntry(date: _utc(2025, 5, 1), amount: 5)],
+          priceBars: [
+            PriceBar(date: _utc(2025, 6), close: 50),
+            PriceBar(date: _utc(2025, 12), close: 100),
+          ],
+        );
+        expect(r.compoundedGrossYield, closeTo(0.10, _eps));
+        expect(r.startPrice, closeTo(50, _eps)); // first valid close, not 100
+      },
+    );
+
+    test(
+      'combined rate of 100% zeroes after-tax yield; above 100% goes negative',
+      () {
+        // rocPct 0 → all income taxable. combined 100% → tax == distributions.
+        final full = YieldMath.compute(
+          ticker: 'FULLTAX',
+          currentPrice: 100,
+          federalPct: 70,
+          statePct: 25,
+          localPct: 5,
+          distributions: [
+            DistributionEntry(date: _utc(2025, 12, 10), amount: 8),
+          ],
+          priceBars: [
+            PriceBar(date: _utc(2025, 12), close: 100),
+            PriceBar(date: _utc(2026, 1), close: 100),
+          ],
+        );
+        expect(full.grossYield, closeTo(0.08, _eps));
+        expect(full.afterTaxYieldRoc, closeTo(0, _eps));
+
+        // combined 1.2 → afterTaxYieldRoc = (10 − 10×1.2) / 100 = −0.02.
+        final over = YieldMath.compute(
+          ticker: 'OVERTAX',
+          currentPrice: 100,
+          federalPct: 80,
+          statePct: 40,
+          localPct: 0,
+          distributions: [
+            DistributionEntry(date: _utc(2025, 12, 10), amount: 10),
+          ],
+          priceBars: [
+            PriceBar(date: _utc(2025, 12), close: 100),
+            PriceBar(date: _utc(2026, 1), close: 100),
+          ],
+        );
+        expect(over.afterTaxYieldRoc, closeTo(-0.02, _eps));
+      },
+    );
+
+    test('rocPct outside 0–100 is clamped', () {
+      final hi = YieldMath.compute(
+        ticker: 'ROCHI',
+        currentPrice: 100,
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        distributions: [
+          DistributionEntry(date: _utc(2025, 12, 10), amount: 10),
+        ],
+        priceBars: [PriceBar(date: _utc(2025, 12), close: 100)],
+        rocPct: 150,
+      );
+      // Clamped to 100% ROC → no taxable income, no tax this year.
+      expect(hi.incomeAmount, closeTo(0, _eps));
+      expect(hi.taxThisYear, closeTo(0, _eps));
+
+      final lo = YieldMath.compute(
+        ticker: 'ROCLO',
+        currentPrice: 100,
+        federalPct: 0,
+        statePct: 0,
+        localPct: 0,
+        distributions: [
+          DistributionEntry(date: _utc(2025, 12, 10), amount: 10),
+        ],
+        priceBars: [PriceBar(date: _utc(2025, 12), close: 100)],
+        rocPct: -50,
+      );
+      // Clamped to 0% ROC → the whole distribution is taxable income.
+      expect(lo.incomeAmount, closeTo(10, _eps));
     });
   });
 }

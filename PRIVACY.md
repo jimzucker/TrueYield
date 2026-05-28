@@ -1,10 +1,10 @@
-# iYield privacy policy
+# TrueYield privacy policy
 
 Last updated: 2026-05-25.
 
 ## Short version
 
-iYield runs entirely on your device. It does not have a backend, does not collect telemetry, does not have user accounts, and does not transmit any personal data to anyone. The only network requests it makes are to Yahoo Finance to fetch the prices and dividend history needed to answer your query.
+TrueYield runs entirely on your device. It does not have a backend, does not collect telemetry, does not have user accounts, and does not transmit any personal data to anyone. The only network requests it makes are to Yahoo Finance to fetch the prices and dividend history needed to answer your query.
 
 ## What stays on your device
 
@@ -17,13 +17,13 @@ This data never leaves your device. You can clear it by uninstalling the app or 
 
 ## What gets sent off your device
 
-When you tap **Calculate**, iYield issues a single HTTPS request to:
+When you tap **Calculate**, TrueYield issues a single HTTPS request to:
 
 ```
 https://query2.finance.yahoo.com/v8/finance/chart/{TICKER}?interval=1mo&range=1y&events=div
 ```
 
-That request goes directly to Yahoo Finance. Yahoo's own privacy and terms apply to that request. iYield does not proxy, log, or aggregate these requests anywhere — there is no iYield server.
+That request goes directly to Yahoo Finance. Yahoo's own privacy and terms apply to that request. TrueYield does not proxy, log, or aggregate these requests anywhere — there is no TrueYield server.
 
 The request contains:
 
@@ -42,7 +42,7 @@ It does not contain your tax rates, your name, your device identifier, or anythi
 
 ## Children's privacy
 
-iYield is not directed at children under 13 and does not knowingly collect any data from anyone, including children.
+TrueYield is not directed at children under 13 and does not knowingly collect any data from anyone, including children.
 
 ## Contact
 

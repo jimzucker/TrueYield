@@ -10,6 +10,8 @@
 
 **Know what a dividend stock or ETF actually pays you — after taxes, and after the share price moves.**
 
+▶ **Try it live in your browser:** [jimzucker.github.io/TrueYield](https://jimzucker.github.io/TrueYield/) — no install required.
+
 TrueYield is a mobile app that takes a ticker and your marginal tax rates and answers one question honestly: *for the last 12 months, what was my real yield?* A headline yield of "15%" can quietly become single digits once you account for the price you'd actually reinvest at, the taxes you'd actually owe, and the change in the share price itself. TrueYield shows you all of it, side by side, in one screen.
 
 ## Screenshots

@@ -48,14 +48,28 @@ void main() {
     expect(find.text('Calculate'), findsNWidgets(2));
   });
 
-  testWidgets('three tabs are present', (tester) async {
+  testWidgets('four tabs are present', (tester) async {
     await tester.pumpWidget(const TrueYieldApp());
     await tester.pump();
 
-    expect(find.byType(Tab), findsNWidgets(3));
+    expect(find.byType(Tab), findsNWidgets(4));
     expect(find.widgetWithText(Tab, 'Calculate'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Distributions'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Prices'), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Info'), findsOneWidget);
+  });
+
+  testWidgets('Info tab explains how to use and read the app', (tester) async {
+    await tester.pumpWidget(const TrueYieldApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(Tab, 'Info'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('How to use'), findsOneWidget);
+    expect(find.text('Reading the result'), findsOneWidget);
+    expect(find.text('Disclaimers'), findsOneWidget);
+    expect(find.text('Project & README'), findsOneWidget);
   });
 
   testWidgets('empty data tabs show "Run Calculate to populate."', (
@@ -328,6 +342,35 @@ void main() {
       await calculate(tester, ticker: 'ERR');
 
       expect(find.textContaining('Lookup failed: HTTP 500'), findsOneWidget);
+    });
+
+    testWidgets('editing an input clears a stale result', (tester) async {
+      final client = MockClient(
+        (req) async => http.Response(
+          yahooChartJson(
+            price: 80,
+            months: [
+              DateTime.utc(2025, 6),
+              DateTime.utc(2025, 12),
+              DateTime.utc(2026, 6),
+            ],
+            closes: [100, 90, 80],
+            dividends: {DateTime.utc(2025, 12, 15): 5.0},
+          ),
+          200,
+        ),
+      );
+      await pumpScreen(tester, client);
+      await calculate(tester, ticker: 'TEST', federal: '32', state: '5');
+      expect(find.text('Total return after tax'), findsOneWidget);
+
+      // Changing any input drops the now-stale card so it can't mislead.
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Return of capital %'),
+        '50',
+      );
+      await tester.pump();
+      expect(find.text('Total return after tax'), findsNothing);
     });
   });
 }

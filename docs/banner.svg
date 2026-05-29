@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="TrueYield — your real yield, after taxes and after the price moves">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A237E"/>
+      <stop offset="55%" stop-color="#3F51B5"/>
+      <stop offset="100%" stop-color="#5C6BC0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="300" rx="28" fill="url(#bg)"/>
+  <!-- subtle upward trend motif -->
+  <polyline points="120,210 260,170 400,196 540,128 680,150 820,96 960,120 1080,74"
+            fill="none" stroke="#C5CAE9" stroke-opacity="0.30"
+            stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="600" y="158" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="96" font-weight="700" fill="#FFFFFF" letter-spacing="1">TrueYield</text>
+  <text x="600" y="214" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="30" fill="#C5CAE9">Your real yield — after taxes and after the price moves</text>
+</svg>

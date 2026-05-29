@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Optional CORS proxy origin for the Yahoo Finance endpoint, supplied at build
 /// time via `--dart-define=YAHOO_PROXY=<origin>` (no trailing slash). It is used
@@ -423,6 +424,26 @@ class _YieldScreenState extends State<YieldScreen> {
   void initState() {
     super.initState();
     _loadSavedInputs();
+    for (final c in [
+      _tickerCtrl,
+      _federalCtrl,
+      _stateCtrl,
+      _localCtrl,
+      _rocCtrl,
+    ]) {
+      c.addListener(_clearStaleResult);
+    }
+  }
+
+  // Editing any input invalidates a shown result, so drop it — the card must
+  // only ever display numbers that match the current inputs.
+  void _clearStaleResult() {
+    if (_result != null || _error != null) {
+      setState(() {
+        _result = null;
+        _error = null;
+      });
+    }
   }
 
   Future<void> _loadSavedInputs() async {
@@ -568,15 +589,18 @@ class _YieldScreenState extends State<YieldScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('TrueYield'),
           bottom: const TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.center,
             tabs: [
               Tab(text: 'Calculate'),
               Tab(text: 'Distributions'),
               Tab(text: 'Prices'),
+              Tab(text: 'Info'),
             ],
           ),
         ),
@@ -586,6 +610,7 @@ class _YieldScreenState extends State<YieldScreen> {
               _buildCalculateTab(context),
               _DistributionsTab(result: _result),
               _PricesTab(result: _result),
+              const _InfoTab(),
             ],
           ),
         ),
@@ -722,6 +747,217 @@ class _YieldScreenState extends State<YieldScreen> {
             ),
           if (_result != null) _ResultCard(result: _result!),
         ],
+      ),
+    );
+  }
+}
+
+// Info tab: a short user guide — what the app tells you, how to use it, and how
+// to read each result line — plus disclaimers and About/links.
+class _InfoTab extends StatelessWidget {
+  const _InfoTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final section = theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w700,
+    );
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('TrueYield', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 4),
+          Text(
+            'Know what a dividend stock or ETF actually pays you — after taxes, '
+            'and after the share price moves.',
+            style: TextStyle(color: muted),
+          ),
+          const Divider(height: 28),
+          Text('How to use', style: section),
+          const SizedBox(height: 6),
+          const Text(
+            '1.  Enter a ticker (e.g. YMAG, SCHD, JEPI).\n'
+            '2.  Enter the Return of capital % — the portion of distributions not '
+            'taxed this year (from the fund’s latest Section 19a notice); '
+            'defaults to 71.\n'
+            '3.  Enter your marginal tax rates — federal, state, local.\n'
+            '4.  Tap Calculate.',
+          ),
+          const Divider(height: 28),
+          Text('Reading the result', style: section),
+          const SizedBox(height: 10),
+          const _InfoTerm(
+            term: 'Total return after tax',
+            desc:
+                'The bottom line — what one share bought a year ago is worth now, '
+                'net of this year’s tax: income and price change together.',
+          ),
+          const _InfoTerm(
+            term: 'DRIP grew your shares',
+            desc:
+                'Distributions are reinvested (a broker DRIP), compounding your '
+                'share count — e.g. 1.00 → 1.59.',
+          ),
+          const _InfoTerm(
+            term: 'Income / Unrealized G/L / Tax this year',
+            desc:
+                'The three pieces that sum to the total: taxable income, the '
+                'paper gain or loss on your shares, and the tax due now.',
+          ),
+          const _InfoTerm(
+            term: 'Advertised vs After-tax yield',
+            desc:
+                'The headline distribution yield vs what you actually keep after '
+                'tax — both measured on today’s price.',
+          ),
+          const _InfoTerm(
+            term: 'Reference grid',
+            desc:
+                'The raw Price, Shares, Present Value, and Cost basis the math is '
+                'built from — a year ago vs now.',
+          ),
+          const Divider(height: 28),
+          Text('The other tabs', style: section),
+          const SizedBox(height: 6),
+          const Text(
+            '•  Distributions — every payout in the last 12 months, split into '
+            'return of capital vs taxable income.\n'
+            '•  Prices — the daily closes behind the calculation.',
+          ),
+          const Divider(height: 28),
+          Text('Disclaimers', style: section),
+          const SizedBox(height: 6),
+          const Text(
+            '•  Not investment advice — figures are historical (trailing 12 '
+            'months), not a forecast.\n'
+            '•  US tax model: one combined marginal rate on the taxable (non-ROC) '
+            'portion of distributions.\n'
+            '•  Return of capital % is your assumption — set it from the '
+            'fund’s latest Section 19a notice.\n'
+            '•  Data is Yahoo Finance’s public, unofficial endpoint and can '
+            'change without notice.',
+          ),
+          const Divider(height: 28),
+          Text('About', style: section),
+          const SizedBox(height: 8),
+          const _AboutLink(
+            label: 'Project & README',
+            url: 'https://github.com/jimzucker/TrueYield#readme',
+          ),
+          const _AboutLink(
+            label: 'License (Apache 2.0)',
+            url: 'https://github.com/jimzucker/TrueYield/blob/main/LICENSE',
+          ),
+          const _AboutLink(
+            label: 'Privacy policy',
+            url: 'https://github.com/jimzucker/TrueYield/blob/main/PRIVACY.md',
+          ),
+          _AboutLink(
+            icon: Icons.article_outlined,
+            label: 'Open-source licenses',
+            onTap: () => showLicensePage(
+              context: context,
+              applicationName: 'TrueYield',
+              applicationLegalese: '© 2026 James A. Zucker · Apache-2.0',
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '© 2026 James A. Zucker · Apache-2.0\n'
+            'Not affiliated with Yahoo. Yahoo and Yahoo Finance are trademarks of '
+            'their respective owners.',
+            style: TextStyle(fontSize: 12, color: muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoTerm extends StatelessWidget {
+  final String term;
+  final String desc;
+  const _InfoTerm({required this.term, required this.desc});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            term,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            desc,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AboutLink extends StatelessWidget {
+  final String label;
+  final String? url;
+  final VoidCallback? onTap;
+  final IconData icon;
+  const _AboutLink({
+    required this.label,
+    this.url,
+    this.onTap,
+    this.icon = Icons.open_in_new,
+  });
+
+  Future<void> _launch() async {
+    final u = url;
+    if (u == null) return;
+    try {
+      await launchUrl(Uri.parse(u), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Best-effort: ignore if no handler can open the link.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return InkWell(
+      onTap: onTap ?? _launch,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                  decorationColor: color,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

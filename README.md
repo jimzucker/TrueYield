@@ -1,11 +1,12 @@
 <p align="center">
-  <img src="docs/icon.png" width="120" alt="TrueYield app icon" />
+  <img src="docs/banner.svg" alt="TrueYield" width="100%" />
 </p>
 
 # TrueYield
 
 [![CI](https://github.com/jimzucker/TrueYield/actions/workflows/ci.yml/badge.svg)](https://github.com/jimzucker/TrueYield/actions/workflows/ci.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+[![Live demo](https://img.shields.io/badge/Live%20demo-online-3F51B5)](https://jimzucker.github.io/TrueYield/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-3F51B5.svg)](./LICENSE)
 
 **Know what a dividend stock or ETF actually pays you — after taxes, and after the share price moves.**
 

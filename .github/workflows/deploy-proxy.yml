@@ -1,0 +1,35 @@
+# Copyright 2026 James A. Zucker
+# Licensed under the Apache License, Version 2.0. See LICENSE and NOTICE.
+#
+# Deploys the CORS proxy (proxy/worker.js) to Cloudflare Workers from CI — no
+# local npm/wrangler needed. One-time setup: add two repository secrets under
+# Settings → Secrets and variables → Actions → Secrets:
+#   CLOUDFLARE_API_TOKEN   – a token with the "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID  – your account id (Cloudflare dashboard → Workers)
+# Then run this workflow (Actions tab → Run workflow) or push a change in proxy/.
+# After the first deploy, copy the printed *.workers.dev URL into the
+# YAHOO_PROXY repository variable so the Pages build uses it.
+name: Deploy CORS proxy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "proxy/**"
+      - ".github/workflows/deploy-proxy.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: proxy
+          command: deploy

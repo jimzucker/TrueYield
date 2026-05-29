@@ -8,34 +8,41 @@ builds are unaffected — they call Yahoo directly and never use the proxy.
 
 It proxies only `GET /v8/finance/chart/*`; everything else is rejected.
 
-## Deploy (one time)
+You need a free Cloudflare account either way (the proxy runs on Cloudflare).
+Pick one deploy path.
 
-1. Install Wrangler and sign in to Cloudflare (free plan is fine):
+### Option A — from GitHub Actions (no local tooling)
 
-   ```sh
-   npm install -g wrangler
-   wrangler login
-   ```
+1. In Cloudflare: create an API token (My Profile → API Tokens → **Edit
+   Cloudflare Workers** template) and note your **Account ID** (Workers dashboard).
+2. In this GitHub repo: **Settings → Secrets and variables → Actions → Secrets**,
+   add:
+   - `CLOUDFLARE_API_TOKEN` — the token from step 1
+   - `CLOUDFLARE_ACCOUNT_ID` — your account id
+3. Run the **Deploy CORS proxy** workflow (Actions tab → Run workflow, or push a
+   change under `proxy/`). It runs `wrangler deploy` for you and logs the
+   `https://trueyield-proxy.<subdomain>.workers.dev` URL.
+4. Continue with **"Point the web build at it"** below.
 
-2. Deploy from this folder:
+### Option B — from your machine
 
-   ```sh
-   cd proxy
-   wrangler deploy
-   ```
+1. `npm install -g wrangler && wrangler login`
+2. `cd proxy && wrangler deploy` (prints the `*.workers.dev` URL).
+3. Continue below.
 
-   Wrangler prints the URL, e.g. `https://trueyield-proxy.<subdomain>.workers.dev`.
+### Point the web build at it
 
-3. Tell the web build to use it. In the GitHub repo:
-   **Settings → Secrets and variables → Actions → Variables → New repository
+1. **Settings → Secrets and variables → Actions → Variables → New repository
    variable**
-
    - **Name:** `YAHOO_PROXY`
-   - **Value:** the worker URL from step 2, **no trailing slash**
+   - **Value:** the worker URL above, **no trailing slash**
+2. Re-run the **Deploy to GitHub Pages** workflow (or push to `main`). The build
+   passes `--dart-define=YAHOO_PROXY=...`, and the live demo fetches through the
+   worker.
 
-4. Re-run the **Deploy to GitHub Pages** workflow (Actions tab, or push to
-   `main`). The build passes `--dart-define=YAHOO_PROXY=...`, and the live demo
-   will fetch data through the worker.
+> You don't need a separate repository — the workflow deploys the worker from
+> this `proxy/` folder. (A dedicated repo also works if you prefer; just copy
+> `worker.js` + `wrangler.toml` and the `deploy-proxy.yml` workflow into it.)
 
 ## How it's wired
 

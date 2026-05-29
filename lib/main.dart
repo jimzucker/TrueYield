@@ -28,12 +28,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// ready-to-deploy Cloudflare Worker.
 const String kYahooProxy = String.fromEnvironment('YAHOO_PROXY');
 
+/// Yahoo Finance chart API origin (no proxy). Native builds always hit this.
+const String kYahooDirect = 'https://query2.finance.yahoo.com';
+
+/// Resolves the chart-API base origin. The proxy is used **only on web** and
+/// only when one is configured; every native target (iOS/Android/desktop) and
+/// any web build without a proxy goes straight to Yahoo. Pure (takes [isWeb] as
+/// a parameter) so both branches are unit-testable — `kIsWeb` is a
+/// compile-time const that can't be toggled in a test.
+String resolveYahooBase({required bool isWeb, required String proxy}) =>
+    (isWeb && proxy.isNotEmpty) ? proxy : kYahooDirect;
+
 /// Base origin for the Yahoo chart API: the CORS proxy on web (when configured),
 /// Yahoo directly otherwise. The proxy forwards by path, so the rest of the URL
 /// is identical either way.
-String get yahooBase => (kIsWeb && kYahooProxy.isNotEmpty)
-    ? kYahooProxy
-    : 'https://query2.finance.yahoo.com';
+String get yahooBase => resolveYahooBase(isWeb: kIsWeb, proxy: kYahooProxy);
 
 void main() {
   runApp(const TrueYieldApp());

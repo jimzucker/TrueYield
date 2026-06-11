@@ -18,6 +18,11 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!-- Without this, mobile browsers (notably Android Chrome) lay the page out
+       at a ~980px desktop width and render the Flutter view zoomed-out, leaving
+       content squished at the top with a large blank area below. -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="A new Flutter project.">
 
   <!-- iOS meta tags & icons -->

@@ -21,6 +21,13 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'roc_data.dart';
+
+/// Trailing return-of-capital % for [ticker] from the bundled YieldMax 19a-1
+/// data ([kRocByTicker]), or null if the fund isn't known. Case-insensitive.
+double? rocForTicker(String ticker) =>
+    kRocByTicker[ticker.trim().toUpperCase()];
+
 /// Optional CORS proxy origin for the Yahoo Finance endpoint, supplied at build
 /// time via `--dart-define=YAHOO_PROXY=<origin>` (no trailing slash). It is used
 /// only on the web build, where the browser enforces CORS and Yahoo's endpoint
@@ -683,6 +690,10 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   // Set from the Distributions tab; survives re-fetch because the key is stable.
   Map<int, double> _rocOverrides = {};
 
+  // The ticker whose bundled ROC we last auto-filled into the ROC field, so we
+  // only re-apply when the ticker actually changes to a different known fund.
+  String? _rocSourceTicker;
+
   static const _kTicker = 'last_ticker';
   static const _kFederal = 'rate_federal';
   static const _kState = 'rate_state';
@@ -705,7 +716,36 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     ]) {
       c.addListener(_clearStaleResult);
     }
+    // Entering a known YieldMax ticker auto-fills its ROC % from the bundled
+    // 19a-1 data; the ticker/ROC fields also drive the source caption, so keep
+    // the form repainting as they change.
+    _tickerCtrl.addListener(_maybeAutofillRoc);
+    _tickerCtrl.addListener(_rebuildForCaption);
+    _rocCtrl.addListener(_rebuildForCaption);
   }
+
+  void _rebuildForCaption() {
+    if (mounted) setState(() {});
+  }
+
+  // When the ticker changes to a known fund, set the ROC % field to that fund's
+  // trailing return-of-capital. Only fires on a genuine ticker change, so a
+  // user's manual ROC edit isn't clobbered while they keep the same ticker.
+  void _maybeAutofillRoc() {
+    final tkr = _tickerCtrl.text.trim().toUpperCase();
+    if (tkr == _rocSourceTicker) return;
+    final roc = rocForTicker(tkr);
+    if (roc == null) {
+      _rocSourceTicker = null;
+      return;
+    }
+    _rocSourceTicker = tkr;
+    _rocCtrl.text = _fmtRoc(roc);
+  }
+
+  // Trim a trailing ".0" so "71.0" shows as "71" but "70.1" stays.
+  static String _fmtRoc(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
 
   // If the app is resumed on a later calendar day, the shown result's TTM
   // window has shifted, so silently re-run against the same inputs to refresh.
@@ -1100,6 +1140,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
+          _buildRocSourceCaption(context),
           const SizedBox(height: 14),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1177,6 +1218,52 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
             _ResultCard(result: _result!, fetchedAt: _resultFetchedAt),
         ],
       ),
+    );
+  }
+
+  // Caption under the ROC field for a recognized YieldMax fund: shows the
+  // bundled 19a-1 source when the field matches, or a one-tap reset when the
+  // user has overridden it. Nothing for unknown tickers.
+  Widget _buildRocSourceCaption(BuildContext context) {
+    final tkr = _tickerCtrl.text.trim().toUpperCase();
+    final roc = rocForTicker(tkr);
+    if (roc == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final current = double.tryParse(_rocCtrl.text.trim());
+    final matches = current != null && (current - roc).abs() < 0.05;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, left: 2),
+      child: matches
+          ? Text(
+              'ROC auto-filled from $tkr’s 19a-1 notices '
+              '(${_fmtRoc(roc)}%, as of $kRocDataAsOf).',
+              style: muted,
+            )
+          : InkWell(
+              onTap: () {
+                _rocSourceTicker = tkr;
+                _rocCtrl.text = _fmtRoc(roc);
+              },
+              child: Text.rich(
+                TextSpan(
+                  style: muted,
+                  children: [
+                    TextSpan(text: '$tkr’s 19a-1 ROC is ${_fmtRoc(roc)}% — '),
+                    TextSpan(
+                      text: 'reset',
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
@@ -1510,9 +1597,11 @@ class _InfoTab extends StatelessWidget {
           const SizedBox(height: 6),
           const Text(
             '1.  Enter a ticker (e.g. YMAG, SCHD, JEPI).\n'
-            '2.  Enter the Return of capital % — the portion of distributions not '
-            'taxed this year (from the fund’s latest Section 19a notice); '
-            'defaults to 71.\n'
+            '2.  Return of capital % — the portion of distributions not taxed '
+            'this year. For many YieldMax funds it auto-fills from their recent '
+            'Section 19a-1 notices when you type the ticker; otherwise it '
+            'defaults to 71. Edit it anytime (tap “reset” to restore the '
+            'fund’s value).\n'
             '3.  Enter your marginal tax rates — federal, state, local.\n'
             '4.  (Optional) Add lots — real buy dates and amounts (shares or \$). '
             'Give a lot a sell date and it books a realized gain; leave it blank '

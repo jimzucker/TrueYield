@@ -352,6 +352,29 @@ void main() {
       expect(find.textContaining('Lookup failed: HTTP 500'), findsOneWidget);
     });
 
+    testWidgets('entering a known ticker auto-fills its ROC from 19a-1', (
+      tester,
+    ) async {
+      final client = MockClient((req) async => http.Response('', 500));
+      await pumpScreen(tester, client);
+
+      final expected = rocForTicker('MSTY');
+      expect(expected, isNotNull); // MSTY is in the bundled table
+      final wanted = expected! == expected.roundToDouble()
+          ? expected.toStringAsFixed(0)
+          : expected.toString();
+
+      await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'MSTY');
+      await tester.pumpAndSettle();
+
+      final roc = tester.widget<TextField>(
+        find.widgetWithText(TextField, 'Return of capital %'),
+      );
+      expect(roc.controller!.text, wanted);
+      // The source caption names the fund.
+      expect(find.textContaining('MSTY’s 19a-1'), findsOneWidget);
+    });
+
     testWidgets('adding two lots renders the portfolio grid', (tester) async {
       final client = MockClient(
         (req) async => http.Response(

@@ -728,6 +728,68 @@ void main() {
       expect(r.sumDistributions, closeTo(2.0, _eps));
     });
 
+    test('a closed lot books a realized gain at the sell price', () {
+      // Bought 10 sh at $100, sold at $120; one $5 dist while held (price 110),
+      // a second $5 dist AFTER the sale must be ignored. Current price ($80) is
+      // irrelevant to a closed lot.
+      final r = YieldMath.compute(
+        ticker: 'SOLD',
+        currentPrice: 80,
+        federalPct: 0,
+        statePct: 0,
+        localPct: 0,
+        distributions: [
+          DistributionEntry(date: _utc(2025, 9, 15), amount: 5),
+          DistributionEntry(date: _utc(2026, 3, 15), amount: 5), // after sell
+        ],
+        priceBars: [
+          PriceBar(date: _utc(2025, 6), close: 100),
+          PriceBar(date: _utc(2025, 9), close: 110),
+          PriceBar(date: _utc(2025, 12), close: 120),
+          PriceBar(date: _utc(2026, 6), close: 80),
+        ],
+        lots: [
+          Lot(
+            buyDate: _utc(2025, 6, 1),
+            mode: LotSizeMode.shares,
+            amount: 10,
+            sellDate: _utc(2025, 12, 1),
+          ),
+        ],
+      );
+      final lot = r.lots.single;
+      expect(lot.isClosed, isTrue);
+      expect(lot.sellPrice, closeTo(120, _eps));
+      // Only the held-period dist compounds: 10 × (1 + 5/110).
+      expect(lot.finalShares, closeTo(10 * (1 + 5 / 110), _eps));
+      // Proceeds = finalShares × $120; basis = $1000 + $50 income.
+      expect(r.nav, closeTo(10 * (1 + 5 / 110) * 120, 1e-6));
+      expect(r.realizedGL, closeTo(10 * (1 + 5 / 110) * 120 - 1050, 1e-6));
+      expect(r.unrealizedGL, closeTo(0, _eps)); // nothing still held
+      expect(r.totalReturnBeforeTax, closeTo((r.nav - 1000) / 1000, _eps));
+    });
+
+    test('Lot JSON round-trips the optional sell date', () {
+      final open = Lot(
+        buyDate: _utc(2025, 6, 1),
+        mode: LotSizeMode.dollars,
+        amount: 2500,
+      );
+      final closed = Lot(
+        buyDate: _utc(2025, 6, 1),
+        mode: LotSizeMode.shares,
+        amount: 10,
+        sellDate: _utc(2025, 12, 1),
+      );
+      final openBack = Lot.fromJson(open.toJson());
+      final closedBack = Lot.fromJson(closed.toJson());
+      expect(openBack.sellDate, isNull);
+      expect(openBack.mode, LotSizeMode.dollars);
+      expect(openBack.amount, 2500);
+      expect(closedBack.sellDate, _utc(2025, 12, 1));
+      expect(closedBack.isClosed, isTrue);
+    });
+
     test('print Portfolio (validated) — YMAG, three lots in app row order', () {
       // Three lots at different buy dates, sized in shares and dollars. Mirrors
       // tools/yield_ref.py portfolio_demo so the two can be eyeballed together.
@@ -782,7 +844,7 @@ void main() {
         buf.writeln(
           '${monthLabel(l.buyDate).padRight(10)}${sh.padLeft(16)}'
           '${money(l.cost).padLeft(11)}${money(l.nav).padLeft(11)}'
-          '${signed(l.unrealizedGL).padLeft(11)}',
+          '${signed(l.gl).padLeft(11)}',
         );
       }
       final ti = r.lots.fold<double>(0, (s, l) => s + l.initialShares);

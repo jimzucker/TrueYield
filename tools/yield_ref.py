@@ -40,18 +40,25 @@ def _roc_frac(pct):
 def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
     """One lot's economics (Model A — income scales by the *initial* share count).
 
-    lot: dict {buyTs, mode 'shares'|'dollars', amount}. Distributions on or after
-    buyTs count; each may carry its own roc (asc holds (ts, amt, roc-or-None))."""
+    lot: dict {buyTs, mode 'shares'|'dollars', amount, sellTs?}. Distributions
+    while held (buyTs <= ts <= sellTs) count; each may carry its own roc (asc
+    holds (ts, amt, roc-or-None)). A closed lot (sellTs set) is valued at the
+    sell-date price (realized gain); an open lot at current_price."""
     buy_price = price_at(lot["buyTs"], sorted_bars) or current_price
     if lot["mode"] == "shares":
         s = lot["amount"]
     else:
         s = lot["amount"] / buy_price if buy_price > 0 else 0.0
 
+    sell_ts = lot.get("sellTs")
+    sell_price = None if sell_ts is None else (price_at(sell_ts, sorted_bars) or current_price)
+
     factor = 1.0
     income_per_share = 0.0
     for ts, amt, roc in asc:
         if ts < lot["buyTs"]:
+            continue
+        if sell_ts is not None and ts > sell_ts:
             continue
         p = price_at(ts, sorted_bars) or current_price
         factor *= 1 + amt / p
@@ -60,17 +67,21 @@ def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
     final_shares = s * factor
     cost = s * buy_price
     income = s * income_per_share
+    nav = final_shares * (sell_price if sell_price is not None else current_price)
     return {
         "buyTs": lot["buyTs"],
+        "sellTs": sell_ts,
+        "isClosed": sell_ts is not None,
         "initialShares": s,
         "buyPrice": buy_price,
+        "sellPrice": sell_price,
         "finalShares": final_shares,
         "cost": cost,
         "incomeAmount": income,
         "taxThisYear": income * combined,
-        "nav": final_shares * current_price,
+        "nav": nav,
         "costBasis": cost + income,
-        "unrealizedGL": final_shares * current_price - (cost + income),
+        "gl": nav - (cost + income),
     }
 
 
@@ -121,7 +132,8 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
     tax_this_year = sum(l["taxThisYear"] for l in lot_results)
     nav = sum(l["nav"] for l in lot_results)
     cost_basis = sum(l["costBasis"] for l in lot_results)
-    unrealized_gl = nav - cost_basis
+    realized_gl = sum(l["gl"] for l in lot_results if l["isClosed"])
+    unrealized_gl = sum(l["gl"] for l in lot_results if not l["isClosed"])
     drip_shares = total_final
     cf_gross = (total_final / total_initial if total_initial > 0 else 1.0) - 1
     per_share_tax = per_share_income * combined
@@ -148,6 +160,7 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
         "nav": nav,
         "costBasis": cost_basis,
         "unrealizedGL": unrealized_gl,
+        "realizedGL": realized_gl,
         "afterTaxYieldRoc": after_tax_yield_roc,
         "totalReturnBeforeTax": total_return_before_tax,
         "totalReturnAfterTax": total_return_after_tax,
@@ -283,8 +296,9 @@ def portfolio_demo():
     print(f"{'Lot':<10}{'Shares':>16}{'Cost':>11}{'Value':>11}{'G/L':>11}")
     for l in out["lots"]:
         sh = f"{l['initialShares']:.2f}->{l['finalShares']:.2f}"
-        print(f"{m(l['buyTs']):<10}{sh:>16}{l['cost']:>11.2f}"
-              f"{l['nav']:>11.2f}{l['unrealizedGL']:>+11.2f}")
+        lbl = m(l["buyTs"]) + (f"->{m(l['sellTs'])}" if l["isClosed"] else "")
+        print(f"{lbl:<10}{sh:>16}{l['cost']:>11.2f}"
+              f"{l['nav']:>11.2f}{l['gl']:>+11.2f}")
     ti = sum(l["initialShares"] for l in out["lots"])
     tf = sum(l["finalShares"] for l in out["lots"])
     print(f"{'Total':<10}{f'{ti:.2f}->{tf:.2f}':>16}{out['totalCost']:>11.2f}"

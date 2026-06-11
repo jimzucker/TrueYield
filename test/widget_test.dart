@@ -382,6 +382,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byTooltip('Remove lot'), findsNWidgets(2));
 
+      // Each lot exposes a sell-date control defaulting to "Held to today".
+      expect(find.text('Sold:'), findsNWidgets(2));
+      expect(find.text('Held to today'), findsNWidgets(2));
+
       await calculate(tester, ticker: 'PORT', federal: '32', state: '5');
 
       // Two lots → the portfolio grid (header + totals) instead of the

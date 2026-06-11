@@ -93,16 +93,25 @@ class PriceBar {
 /// converts to shares using the price on the buy date.
 enum LotSizeMode { shares, dollars }
 
-/// One purchase: shares (or dollars) of the ticker bought on [buyDate], held to
-/// today (no sell date yet). The default single lot — 1 share bought at the
-/// start of the window — reproduces the app's original "one share a year ago"
-/// behavior exactly.
+/// One purchase: shares (or dollars) of the ticker bought on [buyDate]. If
+/// [sellDate] is null the lot is still held (unrealized); otherwise it was sold
+/// on that date and books a realized gain. The default single lot — 1 share
+/// bought at the start of the window, still held — reproduces the app's original
+/// "one share a year ago" behavior exactly.
 class Lot {
   final DateTime buyDate;
   final LotSizeMode mode;
   final double amount; // shares if mode == shares, else dollars invested
+  final DateTime? sellDate; // null = still held
 
-  const Lot({required this.buyDate, required this.mode, required this.amount});
+  const Lot({
+    required this.buyDate,
+    required this.mode,
+    required this.amount,
+    this.sellDate,
+  });
+
+  bool get isClosed => sellDate != null;
 
   /// Resolve to an initial share count given the price on the buy date.
   /// Dollars ÷ price; guards a zero/negative price.
@@ -114,6 +123,7 @@ class Lot {
     'buyDate': buyDate.toUtc().millisecondsSinceEpoch,
     'mode': mode.name,
     'amount': amount,
+    if (sellDate != null) 'sellDate': sellDate!.toUtc().millisecondsSinceEpoch,
   };
 
   factory Lot.fromJson(Map<String, dynamic> j) => Lot(
@@ -123,6 +133,12 @@ class Lot {
     ),
     mode: LotSizeMode.values.byName(j['mode'] as String),
     amount: (j['amount'] as num).toDouble(),
+    sellDate: j['sellDate'] == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(
+            (j['sellDate'] as num).toInt(),
+            isUtc: true,
+          ),
   );
 }
 
@@ -138,9 +154,16 @@ class LotResult {
   final double cost; // S × buyPrice (dollars invested)
   final double incomeAmount; // taxable income (S × Σ d·(1−roc))
   final double taxThisYear; // incomeAmount × combined rate
-  final double nav; // finalShares × currentPrice
+  // Position value now: open lots = finalShares × currentPrice; closed lots =
+  // proceeds = finalShares × sellPrice (locked in on the sell date).
+  final double nav;
   final double costBasis; // cost + reinvested income (ROC cancels — see memory)
-  final double unrealizedGL; // nav − costBasis
+  final double gl; // nav − costBasis (unrealized if open, realized if closed)
+  // Sale, when closed. null sellDate ⇒ still held.
+  final DateTime? sellDate;
+  final double? sellPrice;
+
+  bool get isClosed => sellDate != null;
 
   const LotResult({
     required this.buyDate,
@@ -152,7 +175,9 @@ class LotResult {
     required this.taxThisYear,
     required this.nav,
     required this.costBasis,
-    required this.unrealizedGL,
+    required this.gl,
+    this.sellDate,
+    this.sellPrice,
   });
 }
 
@@ -184,8 +209,11 @@ class YieldResult {
   // adds basis but ROC also lowers basis by the same amount, so they cancel:
   // costBasis = startPrice + incomeAmount.
   final double costBasis;
-  // unrealizedGL = nav - costBasis (taxed as capital gains only when sold).
+  // Capital gain/loss, partitioned: unrealizedGL is the open lots' paper gain
+  // (nav − basis, taxed only when sold); realizedGL is the closed lots' booked
+  // gain (proceeds − basis). Together they equal nav − costBasis.
   final double unrealizedGL;
+  final double realizedGL;
   // ROC-aware after-tax distribution yield: (sum - taxThisYear) / currentPrice.
   final double afterTaxYieldRoc;
   // Total return on the original cost, before and after this year's tax.
@@ -229,6 +257,7 @@ class YieldResult {
     required this.nav,
     required this.costBasis,
     required this.unrealizedGL,
+    required this.realizedGL,
     required this.afterTaxYieldRoc,
     required this.totalReturnBeforeTax,
     required this.totalReturnAfterTax,
@@ -262,6 +291,7 @@ class YieldResult {
       nav: currentPrice,
       costBasis: currentPrice,
       unrealizedGL: 0,
+      realizedGL: 0,
       afterTaxYieldRoc: 0,
       totalReturnBeforeTax: 0,
       totalReturnAfterTax: 0,
@@ -348,14 +378,18 @@ class YieldMath {
         _computeLot(lot, ascDist, sortedCloses, currentPrice, combined, rocPct),
     ];
 
-    // Portfolio aggregates = sums of the per-lot dollar quantities.
+    // Portfolio aggregates = sums of the per-lot dollar quantities. Capital
+    // gain is split: open lots' paper gain (unrealized) vs closed lots' booked
+    // gain (realized). Together they equal nav − costBasis.
     double totalCost = 0,
         totalInitialShares = 0,
         totalFinalShares = 0,
         incomeAmount = 0,
         taxThisYear = 0,
         nav = 0,
-        costBasis = 0;
+        costBasis = 0,
+        unrealizedGL = 0,
+        realizedGL = 0;
     for (final l in lotResults) {
       totalCost += l.cost;
       totalInitialShares += l.initialShares;
@@ -364,8 +398,12 @@ class YieldMath {
       taxThisYear += l.taxThisYear;
       nav += l.nav;
       costBasis += l.costBasis;
+      if (l.isClosed) {
+        realizedGL += l.gl;
+      } else {
+        unrealizedGL += l.gl;
+      }
     }
-    final unrealizedGL = nav - costBasis;
     // dripShares = total shares now; growth is weighted by initial shares so the
     // single default lot (1 → finalShares) keeps its old "1.00 → X" meaning.
     final dripShares = totalFinalShares;
@@ -400,6 +438,7 @@ class YieldMath {
       nav: nav,
       costBasis: costBasis,
       unrealizedGL: unrealizedGL,
+      realizedGL: realizedGL,
       afterTaxYieldRoc: afterTaxYieldRoc,
       totalReturnBeforeTax: totalReturnBeforeTax,
       totalReturnAfterTax: totalReturnAfterTax,
@@ -416,9 +455,12 @@ class YieldMath {
   static double _rocFrac(double pct) => (pct / 100.0).clamp(0.0, 1.0);
 
   /// Economics for one lot: DRIP its initial shares forward over the
-  /// distributions on or after its buy date (Model A — income scales by the
-  /// initial share count, not the growing DRIP count). [defaultRoc] is the
-  /// global ROC % applied to any distribution without its own override.
+  /// distributions while it is held — on or after [Lot.buyDate], and on or
+  /// before [Lot.sellDate] for a closed lot (Model A — income scales by the
+  /// initial share count, not the growing DRIP count). A closed lot is valued
+  /// at the sell-date price (proceeds), booking a realized gain; an open lot is
+  /// valued at [currentPrice]. [defaultRoc] is the global ROC % applied to any
+  /// distribution without its own override.
   static LotResult _computeLot(
     Lot lot,
     List<DistributionEntry> ascDist,
@@ -429,11 +471,16 @@ class YieldMath {
   ) {
     final buyPrice = priceAt(lot.buyDate, sortedCloses) ?? currentPrice;
     final s = lot.initialShares(buyPrice);
+    final sellDate = lot.sellDate;
+    final sellPrice = sellDate == null
+        ? null
+        : (priceAt(sellDate, sortedCloses) ?? currentPrice);
 
     double factor = 1;
     double incomePerShare = 0;
     for (final d in ascDist) {
       if (d.date.isBefore(lot.buyDate)) continue;
+      if (sellDate != null && d.date.isAfter(sellDate)) continue;
       final priceAtDiv = priceAt(d.date, sortedCloses) ?? currentPrice;
       factor *= 1 + d.amount / priceAtDiv;
       incomePerShare += d.amount * (1 - _rocFrac(d.rocPct ?? defaultRoc));
@@ -442,6 +489,10 @@ class YieldMath {
     final finalShares = s * factor;
     final cost = s * buyPrice;
     final incomeAmount = s * incomePerShare;
+    // Closed lots lock in their value at the sell price; open lots float with
+    // the current price.
+    final nav = finalShares * (sellPrice ?? currentPrice);
+    final costBasis = cost + incomeAmount;
     return LotResult(
       buyDate: lot.buyDate,
       initialShares: s,
@@ -450,9 +501,11 @@ class YieldMath {
       cost: cost,
       incomeAmount: incomeAmount,
       taxThisYear: incomeAmount * combined,
-      nav: finalShares * currentPrice,
-      costBasis: cost + incomeAmount,
-      unrealizedGL: finalShares * currentPrice - (cost + incomeAmount),
+      nav: nav,
+      costBasis: costBasis,
+      gl: nav - costBasis,
+      sellDate: sellDate,
+      sellPrice: sellPrice,
     );
   }
 
@@ -854,6 +907,19 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
         setState(() => _error = 'A lot buy date cannot be in the future.');
         return;
       }
+      final sell = lot.sellDate;
+      if (sell != null) {
+        if (sell.isAfter(now)) {
+          setState(() => _error = 'A lot sell date cannot be in the future.');
+          return;
+        }
+        if (sell.isBefore(lot.buyDate)) {
+          setState(
+            () => _error = 'A lot sell date must be after its buy date.',
+          );
+          return;
+        }
+      }
     }
 
     setState(() {
@@ -1232,7 +1298,27 @@ class _LotRowState extends State<_LotRow> {
     super.dispose();
   }
 
-  Future<void> _pickDate() async {
+  // Emit an edit, preserving the fields the caller didn't change (crucially
+  // sellDate, which the buy/amount/mode controls must not drop).
+  void _emit({DateTime? buyDate, LotSizeMode? mode, double? amount}) {
+    final lot = widget.lot;
+    final newBuy = buyDate ?? lot.buyDate;
+    // If a new buy date lands after the sell date, the sale no longer makes
+    // sense — revert to held.
+    final sell = (lot.sellDate != null && lot.sellDate!.isBefore(newBuy))
+        ? null
+        : lot.sellDate;
+    widget.onChanged(
+      Lot(
+        buyDate: newBuy,
+        mode: mode ?? lot.mode,
+        amount: amount ?? lot.amount,
+        sellDate: sell,
+      ),
+    );
+  }
+
+  Future<void> _pickBuyDate() async {
     final now = DateTime.now();
     final initial = widget.lot.buyDate.isAfter(now) ? now : widget.lot.buyDate;
     final picked = await showDatePicker(
@@ -1242,90 +1328,152 @@ class _LotRowState extends State<_LotRow> {
       lastDate: now,
     );
     if (picked == null) return;
+    _emit(buyDate: DateTime.utc(picked.year, picked.month, picked.day));
+  }
+
+  Future<void> _pickSellDate() async {
+    final lot = widget.lot;
+    final now = DateTime.now();
+    final initial = lot.sellDate ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(lot.buyDate) ? lot.buyDate : initial,
+      firstDate: lot.buyDate,
+      lastDate: now,
+    );
+    if (picked == null) return;
     widget.onChanged(
       Lot(
-        buyDate: DateTime.utc(picked.year, picked.month, picked.day),
-        mode: widget.lot.mode,
-        amount: widget.lot.amount,
+        buyDate: lot.buyDate,
+        mode: lot.mode,
+        amount: lot.amount,
+        sellDate: DateTime.utc(picked.year, picked.month, picked.day),
       ),
     );
   }
 
+  void _clearSell() => widget.onChanged(
+    Lot(
+      buyDate: widget.lot.buyDate,
+      mode: widget.lot.mode,
+      amount: widget.lot.amount,
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final lot = widget.lot;
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 4,
-            child: OutlinedButton(
-              onPressed: _pickDate,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 14,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                flex: 4,
+                child: OutlinedButton(
+                  onPressed: _pickBuyDate,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 14,
+                    ),
+                  ),
+                  child: Text(
+                    fmtDateHuman(lot.buyDate),
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
-              child: Text(
-                fmtDateHuman(lot.buyDate),
-                style: const TextStyle(fontSize: 13),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 3,
-            child: TextField(
-              controller: _amountCtrl,
-              focusNode: _amountFocus,
-              style: const TextStyle(fontSize: 15),
-              decoration: InputDecoration(
-                isDense: true,
-                border: const OutlineInputBorder(),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 12,
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: _amountCtrl,
+                  focusNode: _amountFocus,
+                  style: const TextStyle(fontSize: 15),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 12,
+                    ),
+                    prefixText: lot.mode == LotSizeMode.dollars ? '\$' : null,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  onChanged: (t) {
+                    final v = double.tryParse(t.trim());
+                    if (v == null) return;
+                    _emit(amount: v);
+                  },
                 ),
-                prefixText: lot.mode == LotSizeMode.dollars ? '\$' : null,
               ),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+              const SizedBox(width: 6),
+              SegmentedButton<LotSizeMode>(
+                showSelectedIcon: false,
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const WidgetStatePropertyAll(
+                    TextStyle(fontSize: 12),
+                  ),
+                ),
+                segments: const [
+                  ButtonSegment(value: LotSizeMode.shares, label: Text('sh')),
+                  ButtonSegment(value: LotSizeMode.dollars, label: Text('\$')),
+                ],
+                selected: {lot.mode},
+                onSelectionChanged: (s) => _emit(mode: s.first),
               ),
-              onChanged: (t) {
-                final v = double.tryParse(t.trim());
-                if (v == null) return;
-                widget.onChanged(
-                  Lot(buyDate: lot.buyDate, mode: lot.mode, amount: v),
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 6),
-          SegmentedButton<LotSizeMode>(
-            showSelectedIcon: false,
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 12)),
-            ),
-            segments: const [
-              ButtonSegment(value: LotSizeMode.shares, label: Text('sh')),
-              ButtonSegment(value: LotSizeMode.dollars, label: Text('\$')),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: widget.onRemove,
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: 'Remove lot',
+              ),
             ],
-            selected: {lot.mode},
-            onSelectionChanged: (s) => widget.onChanged(
-              Lot(buyDate: lot.buyDate, mode: s.first, amount: lot.amount),
-            ),
           ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            onPressed: widget.onRemove,
-            icon: const Icon(Icons.close, size: 18),
-            tooltip: 'Remove lot',
+          // Sell row: held to today, or a sell date that books a realized gain.
+          Padding(
+            padding: const EdgeInsets.only(left: 2, top: 2),
+            child: Row(
+              children: [
+                Text(
+                  'Sold:',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _pickSellDate,
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: Text(
+                    lot.isClosed
+                        ? fmtDateHuman(lot.sellDate!)
+                        : 'Held to today',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                if (lot.isClosed)
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _clearSell,
+                    icon: const Icon(Icons.close, size: 14),
+                    tooltip: 'Clear sell date (hold)',
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1366,7 +1514,10 @@ class _InfoTab extends StatelessWidget {
             'taxed this year (from the fund’s latest Section 19a notice); '
             'defaults to 71.\n'
             '3.  Enter your marginal tax rates — federal, state, local.\n'
-            '4.  Tap Calculate.',
+            '4.  (Optional) Add lots — real buy dates and amounts (shares or \$). '
+            'Give a lot a sell date and it books a realized gain; leave it blank '
+            'to hold to today. No lots = one share bought a year ago.\n'
+            '5.  Tap Calculate.',
           ),
           const Divider(height: 28),
           Text('Reading the result', style: section),
@@ -1387,7 +1538,9 @@ class _InfoTab extends StatelessWidget {
             term: 'Income / Unrealized G/L / Tax this year',
             desc:
                 'The three pieces that sum to the total: taxable income, the '
-                'paper gain or loss on your shares, and the tax due now.',
+                'paper gain or loss on your shares, and the tax due now. With '
+                'sold lots a Realized G/L line is added for gains booked at the '
+                'sell price.',
           ),
           const _InfoTerm(
             term: 'Advertised vs After-tax yield',
@@ -1668,13 +1821,24 @@ class _ResultCard extends StatelessWidget {
               valueColor: _gain,
               nested: true,
             ),
-            _StmtRow(
-              label: 'Unrealized G/L',
-              sub: '${_money(r.nav)} value − ${_money(r.costBasis)} basis',
-              value: _signedMoney(r.unrealizedGL),
-              valueColor: _signColor(r.unrealizedGL),
-              nested: true,
-            ),
+            if (r.realizedGL != 0)
+              _StmtRow(
+                label: 'Realized G/L',
+                sub: 'booked on sold lots',
+                value: _signedMoney(r.realizedGL),
+                valueColor: _signColor(r.realizedGL),
+                nested: true,
+              ),
+            if (r.unrealizedGL != 0 || r.realizedGL == 0)
+              _StmtRow(
+                label: 'Unrealized G/L',
+                sub: r.realizedGL != 0
+                    ? 'paper gain on lots still held'
+                    : '${_money(r.nav)} value − ${_money(r.costBasis)} basis',
+                value: _signedMoney(r.unrealizedGL),
+                valueColor: _signColor(r.unrealizedGL),
+                nested: true,
+              ),
             _StmtRow(
               label: 'Tax this year',
               sub:
@@ -1926,18 +2090,26 @@ class _PortfolioGrid extends StatelessWidget {
     final totalInitial = r.lots.fold<double>(0, (s, l) => s + l.initialShares);
     final totalFinal = r.lots.fold<double>(0, (s, l) => s + l.finalShares);
 
+    // Closed lots show "buy→sell" months; open lots just the buy month.
     TableRow lotRow(LotResult l) => TableRow(
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 5),
-          child: Text(_monthLabel(l.buyDate), style: theme.textTheme.bodySmall),
+          child: Text(
+            l.isClosed
+                ? '${_monthLabel(l.buyDate)}→${_monthLabel(l.sellDate!)}'
+                : _monthLabel(l.buyDate),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontStyle: l.isClosed ? FontStyle.italic : null,
+            ),
+          ),
         ),
         cell(
           '${l.initialShares.toStringAsFixed(2)}→${l.finalShares.toStringAsFixed(2)}',
         ),
         cell(_money(l.cost)),
         cell(_money(l.nav)),
-        cell(_signedMoney(l.unrealizedGL), color: _signColor(l.unrealizedGL)),
+        cell(_signedMoney(l.gl), color: _signColor(l.gl)),
       ],
     );
 
@@ -1978,8 +2150,8 @@ class _PortfolioGrid extends StatelessWidget {
             cell(_money(r.totalCost)),
             cell(_money(r.nav)),
             cell(
-              _signedMoney(r.unrealizedGL),
-              color: _signColor(r.unrealizedGL),
+              _signedMoney(r.unrealizedGL + r.realizedGL),
+              color: _signColor(r.unrealizedGL + r.realizedGL),
             ),
           ],
         ),

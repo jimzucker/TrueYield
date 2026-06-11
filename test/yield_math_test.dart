@@ -617,8 +617,7 @@ void main() {
       final explicit = run([
         Lot(
           buyDate: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-          mode: LotSizeMode.shares,
-          amount: 1,
+          shares: 1,
         ),
       ]);
       // The default lot must reproduce the original per-share numbers exactly.
@@ -646,8 +645,8 @@ void main() {
         distributions: twoDists(),
         priceBars: flatBars(),
         lots: [
-          Lot(buyDate: _utc(2025, 6, 1), mode: LotSizeMode.shares, amount: 10),
-          Lot(buyDate: _utc(2025, 8, 1), mode: LotSizeMode.shares, amount: 10),
+          Lot(buyDate: _utc(2025, 6, 1), shares: 10),
+          Lot(buyDate: _utc(2025, 8, 1), shares: 10),
         ],
       );
       expect(r.isSinglePortfolioLot, isFalse);
@@ -666,7 +665,7 @@ void main() {
       expect(r.totalReturnBeforeTax, closeTo(30.10 / 2000, _eps));
     });
 
-    test('a dollar lot converts to shares at the buy-date price', () {
+    test('a cost-only lot converts to shares at the buy-date price', () {
       final r = YieldMath.compute(
         ticker: 'USD',
         currentPrice: 100,
@@ -675,17 +674,36 @@ void main() {
         localPct: 0,
         distributions: twoDists(),
         priceBars: flatBars(),
-        lots: [
-          Lot(
-            buyDate: _utc(2025, 6, 1),
-            mode: LotSizeMode.dollars,
-            amount: 1000,
-          ),
-        ],
+        lots: [Lot(buyDate: _utc(2025, 6, 1), cost: 1000)],
       );
       // $1000 ÷ $100 = 10 initial shares.
       expect(r.lots.single.initialShares, closeTo(10, _eps));
       expect(r.totalCost, closeTo(1000, _eps));
+    });
+
+    test('a lot with both shares and cost uses cost÷shares as the basis', () {
+      // 100 shares for $1500 → $15/share basis even though the market close is
+      // $100. Flat price, no dists → value = 100 × $100 = $10,000.
+      final r = YieldMath.compute(
+        ticker: 'BOTH',
+        currentPrice: 100,
+        federalPct: 0,
+        statePct: 0,
+        localPct: 0,
+        distributions: twoDists(),
+        priceBars: flatBars(),
+        lots: [Lot(buyDate: _utc(2025, 6, 1), shares: 100, cost: 1500)],
+      );
+      final lot = r.lots.single;
+      expect(lot.initialShares, closeTo(100, _eps));
+      expect(
+        lot.buyPrice,
+        closeTo(15, _eps),
+      ); // cost ÷ shares, not the $100 close
+      expect(r.totalCost, closeTo(1500, _eps));
+      // Income = 100 sh × $2/sh = $200; costBasis = 1500 + 200 = 1700.
+      expect(r.incomeAmount, closeTo(200, _eps));
+      expect(r.costBasis, closeTo(1700, _eps));
     });
 
     test('a lot bought after every distribution earns no income', () {
@@ -697,9 +715,7 @@ void main() {
         localPct: 0,
         distributions: twoDists(),
         priceBars: flatBars(),
-        lots: [
-          Lot(buyDate: _utc(2026, 5, 1), mode: LotSizeMode.shares, amount: 10),
-        ],
+        lots: [Lot(buyDate: _utc(2026, 5, 1), shares: 10)],
       );
       final lot = r.lots.single;
       expect(lot.incomeAmount, closeTo(0, _eps));
@@ -751,8 +767,7 @@ void main() {
         lots: [
           Lot(
             buyDate: _utc(2025, 6, 1),
-            mode: LotSizeMode.shares,
-            amount: 10,
+            shares: 10,
             sellDate: _utc(2025, 12, 1),
           ),
         ],
@@ -769,25 +784,39 @@ void main() {
       expect(r.totalReturnBeforeTax, closeTo((r.nav - 1000) / 1000, _eps));
     });
 
-    test('Lot JSON round-trips the optional sell date', () {
-      final open = Lot(
+    test('Lot JSON round-trips shares, cost, and sell date', () {
+      final both = Lot(
         buyDate: _utc(2025, 6, 1),
-        mode: LotSizeMode.dollars,
-        amount: 2500,
-      );
-      final closed = Lot(
-        buyDate: _utc(2025, 6, 1),
-        mode: LotSizeMode.shares,
-        amount: 10,
+        shares: 327,
+        cost: 5000,
         sellDate: _utc(2025, 12, 1),
       );
-      final openBack = Lot.fromJson(open.toJson());
-      final closedBack = Lot.fromJson(closed.toJson());
-      expect(openBack.sellDate, isNull);
-      expect(openBack.mode, LotSizeMode.dollars);
-      expect(openBack.amount, 2500);
-      expect(closedBack.sellDate, _utc(2025, 12, 1));
-      expect(closedBack.isClosed, isTrue);
+      final costOnly = Lot(buyDate: _utc(2025, 6, 1), cost: 2500);
+      final b = Lot.fromJson(both.toJson());
+      final c = Lot.fromJson(costOnly.toJson());
+      expect(b.shares, 327);
+      expect(b.cost, 5000);
+      expect(b.sellDate, _utc(2025, 12, 1));
+      expect(c.shares, isNull);
+      expect(c.cost, 2500);
+      expect(c.sellDate, isNull);
+    });
+
+    test('Lot.fromJson migrates the old {mode, amount} shape', () {
+      final shares = Lot.fromJson({
+        'buyDate': _utc(2025, 6, 1).millisecondsSinceEpoch,
+        'mode': 'shares',
+        'amount': 50,
+      });
+      final dollars = Lot.fromJson({
+        'buyDate': _utc(2025, 6, 1).millisecondsSinceEpoch,
+        'mode': 'dollars',
+        'amount': 5000,
+      });
+      expect(shares.shares, 50);
+      expect(shares.cost, isNull);
+      expect(dollars.cost, 5000);
+      expect(dollars.shares, isNull);
     });
 
     test('print Portfolio (validated) — YMAG, three lots in app row order', () {
@@ -803,13 +832,9 @@ void main() {
         priceBars: ymag_daily.kYMAGPriceBars,
         rocPct: 71,
         lots: [
-          Lot(buyDate: _utc(2025, 6, 1), mode: LotSizeMode.shares, amount: 100),
-          Lot(
-            buyDate: _utc(2025, 12, 1),
-            mode: LotSizeMode.dollars,
-            amount: 5000,
-          ),
-          Lot(buyDate: _utc(2026, 3, 1), mode: LotSizeMode.shares, amount: 50),
+          Lot(buyDate: _utc(2025, 6, 1), shares: 100),
+          Lot(buyDate: _utc(2025, 12, 1), cost: 5000),
+          Lot(buyDate: _utc(2026, 3, 1), shares: 50),
         ],
       );
 

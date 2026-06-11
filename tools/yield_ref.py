@@ -40,15 +40,17 @@ def _roc_frac(pct):
 def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
     """One lot's economics (Model A — income scales by the *initial* share count).
 
-    lot: dict {buyTs, mode 'shares'|'dollars', amount, sellTs?}. Distributions
-    while held (buyTs <= ts <= sellTs) count; each may carry its own roc (asc
-    holds (ts, amt, roc-or-None)). A closed lot (sellTs set) is valued at the
-    sell-date price (realized gain); an open lot at current_price."""
-    buy_price = price_at(lot["buyTs"], sorted_bars) or current_price
-    if lot["mode"] == "shares":
-        s = lot["amount"]
-    else:
-        s = lot["amount"] / buy_price if buy_price > 0 else 0.0
+    lot: dict {buyTs, shares?, cost?, sellTs?} — enter shares and/or cost; both
+    means cost/shares is the basis. Distributions while held (buyTs <= ts <=
+    sellTs) count; each may carry its own roc (asc holds (ts, amt, roc-or-None)).
+    A closed lot (sellTs set) is valued at the sell-date price (realized gain);
+    an open lot at current_price."""
+    market_buy_price = price_at(lot["buyTs"], sorted_bars) or current_price
+    shares, cost = lot.get("shares"), lot.get("cost")
+    s = shares if shares is not None else (
+        (cost or 0) / market_buy_price if market_buy_price > 0 else 0.0)
+    cost = cost if cost is not None else (shares or 0) * market_buy_price
+    buy_price = cost / s if s > 0 else market_buy_price
 
     sell_ts = lot.get("sellTs")
     sell_price = None if sell_ts is None else (price_at(sell_ts, sorted_bars) or current_price)
@@ -65,7 +67,6 @@ def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
         income_per_share += amt * (1 - _roc_frac(roc if roc is not None else default_roc))
 
     final_shares = s * factor
-    cost = s * buy_price
     income = s * income_per_share
     nav = final_shares * (sell_price if sell_price is not None else current_price)
     return {
@@ -88,8 +89,8 @@ def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
 def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
             roc_pct=0.0, lots=None):
     """dists: list[(ts, amount)] or [(ts, amount, roc-or-None)]; bars: list[(ts,
-    close-or-None)] — both unsorted ok. lots: list of {buyTs, mode, amount} or
-    None for the single default lot.
+    close-or-None)] — both unsorted ok. lots: list of {buyTs, shares?, cost?,
+    sellTs?} or None for the single default lot.
 
     Mirrors lib/main.dart YieldMath.compute: real broker-DRIP share growth, a
     return-of-capital-aware tax basis (see roc-cost-basis-and-gl memory), and
@@ -119,7 +120,7 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
             break
 
     # No explicit lots → one default lot (epoch 0, 1 share) → original per-share math.
-    eff_lots = lots if lots else [{"buyTs": 0, "mode": "shares", "amount": 1}]
+    eff_lots = lots if lots else [{"buyTs": 0, "shares": 1}]
     lot_results = [
         _compute_lot(l, asc, sorted_bars, current_price, combined, roc_pct)
         for l in eff_lots
@@ -278,9 +279,9 @@ def portfolio_demo():
         return int(datetime(y, m, d, tzinfo=timezone.utc).timestamp())
 
     lots = [
-        {"buyTs": ts(2025, 6, 1), "mode": "shares", "amount": 100},
-        {"buyTs": ts(2025, 12, 1), "mode": "dollars", "amount": 5000},
-        {"buyTs": ts(2026, 3, 1), "mode": "shares", "amount": 50},
+        {"buyTs": ts(2025, 6, 1), "shares": 100},
+        {"buyTs": ts(2025, 12, 1), "cost": 5000},
+        {"buyTs": ts(2026, 3, 1), "shares": 50},
     ]
     out = compute(
         ticker=fx["ticker"], current_price=fx["currentPrice"],

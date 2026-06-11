@@ -96,57 +96,69 @@ class PriceBar {
   const PriceBar({required this.date, required this.close});
 }
 
-/// How a lot's size was entered: a share count, or a dollar amount the app
-/// converts to shares using the price on the buy date.
-enum LotSizeMode { shares, dollars }
-
-/// One purchase: shares (or dollars) of the ticker bought on [buyDate]. If
-/// [sellDate] is null the lot is still held (unrealized); otherwise it was sold
-/// on that date and books a realized gain. The default single lot — 1 share
+/// One purchase of the ticker on [buyDate], sized by a share count and/or a
+/// dollar cost — enter whichever you have:
+///   • both → that IS your cost basis (price = cost ÷ shares), more accurate
+///     than a market close (e.g. an odd fill or a transferred-in position);
+///   • shares only → cost is derived from the buy-date market price;
+///   • cost only → shares are derived from the buy-date market price.
+/// If [sellDate] is null the lot is still held (unrealized); otherwise it was
+/// sold on that date and books a realized gain. The default single lot — 1 share
 /// bought at the start of the window, still held — reproduces the app's original
 /// "one share a year ago" behavior exactly.
 class Lot {
   final DateTime buyDate;
-  final LotSizeMode mode;
-  final double amount; // shares if mode == shares, else dollars invested
+  final double? shares; // entered share count, if any
+  final double? cost; // entered dollar cost, if any
   final DateTime? sellDate; // null = still held
 
-  const Lot({
-    required this.buyDate,
-    required this.mode,
-    required this.amount,
-    this.sellDate,
-  });
+  const Lot({required this.buyDate, this.shares, this.cost, this.sellDate});
 
   bool get isClosed => sellDate != null;
 
-  /// Resolve to an initial share count given the price on the buy date.
-  /// Dollars ÷ price; guards a zero/negative price.
-  double initialShares(double buyPrice) => mode == LotSizeMode.shares
-      ? amount
-      : (buyPrice > 0 ? amount / buyPrice : 0);
+  /// Initial share count given the buy-date [marketPrice]. Uses the entered
+  /// shares if present, else cost ÷ price (guards a zero/negative price).
+  double initialShares(double marketPrice) =>
+      shares ?? (marketPrice > 0 ? (cost ?? 0) / marketPrice : 0);
+
+  /// Dollars invested given the buy-date [marketPrice]. Uses the entered cost
+  /// if present, else shares × price.
+  double initialCost(double marketPrice) => cost ?? (shares ?? 0) * marketPrice;
 
   Map<String, dynamic> toJson() => {
     'buyDate': buyDate.toUtc().millisecondsSinceEpoch,
-    'mode': mode.name,
-    'amount': amount,
+    if (shares != null) 'shares': shares,
+    if (cost != null) 'cost': cost,
     if (sellDate != null) 'sellDate': sellDate!.toUtc().millisecondsSinceEpoch,
   };
 
-  factory Lot.fromJson(Map<String, dynamic> j) => Lot(
-    buyDate: DateTime.fromMillisecondsSinceEpoch(
-      (j['buyDate'] as num).toInt(),
-      isUtc: true,
-    ),
-    mode: LotSizeMode.values.byName(j['mode'] as String),
-    amount: (j['amount'] as num).toDouble(),
-    sellDate: j['sellDate'] == null
-        ? null
-        : DateTime.fromMillisecondsSinceEpoch(
-            (j['sellDate'] as num).toInt(),
-            isUtc: true,
-          ),
-  );
+  factory Lot.fromJson(Map<String, dynamic> j) {
+    // Migrate the old {mode, amount} shape to {shares|cost}.
+    double? shares = (j['shares'] as num?)?.toDouble();
+    double? cost = (j['cost'] as num?)?.toDouble();
+    if (shares == null && cost == null && j['amount'] != null) {
+      final amount = (j['amount'] as num).toDouble();
+      if (j['mode'] == 'dollars') {
+        cost = amount;
+      } else {
+        shares = amount;
+      }
+    }
+    return Lot(
+      buyDate: DateTime.fromMillisecondsSinceEpoch(
+        (j['buyDate'] as num).toInt(),
+        isUtc: true,
+      ),
+      shares: shares,
+      cost: cost,
+      sellDate: j['sellDate'] == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(
+              (j['sellDate'] as num).toInt(),
+              isUtc: true,
+            ),
+    );
+  }
 }
 
 /// Per-lot economics under the broker-DRIP + return-of-capital model. Only
@@ -374,8 +386,7 @@ class YieldMath {
         ? [
             Lot(
               buyDate: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-              mode: LotSizeMode.shares,
-              amount: 1,
+              shares: 1,
             ),
           ]
         : lots;
@@ -476,8 +487,12 @@ class YieldMath {
     double combined,
     double defaultRoc,
   ) {
-    final buyPrice = priceAt(lot.buyDate, sortedCloses) ?? currentPrice;
-    final s = lot.initialShares(buyPrice);
+    final marketBuyPrice = priceAt(lot.buyDate, sortedCloses) ?? currentPrice;
+    final s = lot.initialShares(marketBuyPrice);
+    final cost = lot.initialCost(marketBuyPrice);
+    // Effective per-share basis: cost ÷ shares (when the user entered both this
+    // can differ from the market close — that's their actual fill).
+    final buyPrice = s > 0 ? cost / s : marketBuyPrice;
     final sellDate = lot.sellDate;
     final sellPrice = sellDate == null
         ? null
@@ -494,7 +509,6 @@ class YieldMath {
     }
 
     final finalShares = s * factor;
-    final cost = s * buyPrice;
     final incomeAmount = s * incomePerShare;
     // Closed lots lock in their value at the sell price; open lots float with
     // the current price.
@@ -939,8 +953,14 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     }
     final now = DateTime.now();
     for (final lot in _lots) {
-      if (lot.amount <= 0) {
-        setState(() => _error = 'Each lot must have a positive amount.');
+      final hasShares = lot.shares != null;
+      final hasCost = lot.cost != null;
+      if (!hasShares && !hasCost) {
+        setState(() => _error = 'Each lot needs a share count or a cost.');
+        return;
+      }
+      if ((hasShares && lot.shares! <= 0) || (hasCost && lot.cost! <= 0)) {
+        setState(() => _error = 'Lot shares and cost must be positive.');
         return;
       }
       if (lot.buyDate.isAfter(now)) {
@@ -1292,13 +1312,12 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                 TextButton.icon(
                   onPressed: () => _mutateLots(() {
                     // Seed a new lot ~1 year ago, 100 shares (a sensible start
-                    // the user edits). Default mode = shares.
+                    // the user edits — they can add a cost too).
                     final now = DateTime.now();
                     _lots.add(
                       Lot(
                         buyDate: DateTime.utc(now.year - 1, now.month, now.day),
-                        mode: LotSizeMode.shares,
-                        amount: 100,
+                        shares: 100,
                       ),
                     );
                   }),
@@ -1352,54 +1371,70 @@ class _LotRow extends StatefulWidget {
 }
 
 class _LotRowState extends State<_LotRow> {
-  late final TextEditingController _amountCtrl;
-  late final FocusNode _amountFocus;
+  late final TextEditingController _sharesCtrl;
+  late final TextEditingController _costCtrl;
+  late final FocusNode _sharesFocus;
+  late final FocusNode _costFocus;
 
   @override
   void initState() {
     super.initState();
-    _amountCtrl = TextEditingController(text: _fmt(widget.lot.amount));
-    _amountFocus = FocusNode();
+    _sharesCtrl = TextEditingController(text: _fmt(widget.lot.shares));
+    _costCtrl = TextEditingController(text: _fmt(widget.lot.cost));
+    _sharesFocus = FocusNode();
+    _costFocus = FocusNode();
   }
 
   // Rows are keyed by index, so removing a middle lot reuses this State for a
-  // different lot. When that happens (and we're not mid-edit), resync the field
-  // — but never disturb the user's active typing.
+  // different lot. When that happens (and we're not mid-edit in a field), resync
+  // it — but never disturb the user's active typing.
   @override
   void didUpdateWidget(_LotRow old) {
     super.didUpdateWidget(old);
-    if (!_amountFocus.hasFocus && widget.lot.amount != old.lot.amount) {
-      final t = _fmt(widget.lot.amount);
-      if (_amountCtrl.text != t) _amountCtrl.text = t;
+    if (!_sharesFocus.hasFocus && widget.lot.shares != old.lot.shares) {
+      final t = _fmt(widget.lot.shares);
+      if (_sharesCtrl.text != t) _sharesCtrl.text = t;
+    }
+    if (!_costFocus.hasFocus && widget.lot.cost != old.lot.cost) {
+      final t = _fmt(widget.lot.cost);
+      if (_costCtrl.text != t) _costCtrl.text = t;
     }
   }
 
-  // Trim a trailing ".0" so "100.0" shows as "100" but "12.5" stays.
-  static String _fmt(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+  // Trim a trailing ".0" so "100.0" shows as "100" but "12.5" stays; null → "".
+  static String _fmt(double? v) => v == null
+      ? ''
+      : (v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString());
 
   @override
   void dispose() {
-    _amountFocus.dispose();
-    _amountCtrl.dispose();
+    _sharesFocus.dispose();
+    _costFocus.dispose();
+    _sharesCtrl.dispose();
+    _costCtrl.dispose();
     super.dispose();
   }
 
-  // Emit an edit, preserving the fields the caller didn't change (crucially
-  // sellDate, which the buy/amount/mode controls must not drop).
-  void _emit({DateTime? buyDate, LotSizeMode? mode, double? amount}) {
+  // Emit an edit. `keepSell: false` clears the sale; otherwise sellDate is
+  // preserved (and dropped only if a new buy date lands after it).
+  void _emit({
+    DateTime? buyDate,
+    double? shares,
+    double? cost,
+    bool sharesSet = false,
+    bool costSet = false,
+    DateTime? sellDate,
+    bool keepSell = true,
+  }) {
     final lot = widget.lot;
     final newBuy = buyDate ?? lot.buyDate;
-    // If a new buy date lands after the sell date, the sale no longer makes
-    // sense — revert to held.
-    final sell = (lot.sellDate != null && lot.sellDate!.isBefore(newBuy))
-        ? null
-        : lot.sellDate;
+    DateTime? sell = sellDate ?? (keepSell ? lot.sellDate : null);
+    if (sell != null && sell.isBefore(newBuy)) sell = null;
     widget.onChanged(
       Lot(
         buyDate: newBuy,
-        mode: mode ?? lot.mode,
-        amount: amount ?? lot.amount,
+        shares: sharesSet ? shares : lot.shares,
+        cost: costSet ? cost : lot.cost,
         sellDate: sell,
       ),
     );
@@ -1429,101 +1464,95 @@ class _LotRowState extends State<_LotRow> {
       lastDate: now,
     );
     if (picked == null) return;
-    widget.onChanged(
-      Lot(
-        buyDate: lot.buyDate,
-        mode: lot.mode,
-        amount: lot.amount,
-        sellDate: DateTime.utc(picked.year, picked.month, picked.day),
-      ),
-    );
+    _emit(sellDate: DateTime.utc(picked.year, picked.month, picked.day));
   }
 
-  void _clearSell() => widget.onChanged(
-    Lot(
-      buyDate: widget.lot.buyDate,
-      mode: widget.lot.mode,
-      amount: widget.lot.amount,
-    ),
-  );
+  void _clearSell() => _emit(keepSell: false);
+
+  Widget _numField(
+    TextEditingController ctrl,
+    FocusNode focus,
+    String label, {
+    String? prefix,
+    required void Function(double?) onValue,
+  }) {
+    return TextField(
+      controller: ctrl,
+      focusNode: focus,
+      style: const TextStyle(fontSize: 15),
+      decoration: InputDecoration(
+        isDense: true,
+        labelText: label,
+        prefixText: prefix,
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      ),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (t) {
+        final s = t.trim();
+        onValue(s.isEmpty ? null : double.tryParse(s));
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final lot = widget.lot;
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.only(top: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                flex: 4,
-                child: OutlinedButton(
+                child: OutlinedButton.icon(
                   onPressed: _pickBuyDate,
+                  icon: const Icon(Icons.event, size: 16),
                   style: OutlinedButton.styleFrom(
+                    alignment: Alignment.centerLeft,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 14,
+                      horizontal: 10,
+                      vertical: 12,
                     ),
                   ),
-                  child: Text(
-                    fmtDateHuman(lot.buyDate),
+                  label: Text(
+                    'Bought ${fmtDateHuman(lot.buyDate)}',
                     style: const TextStyle(fontSize: 13),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                flex: 3,
-                child: TextField(
-                  controller: _amountCtrl,
-                  focusNode: _amountFocus,
-                  style: const TextStyle(fontSize: 15),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: const OutlineInputBorder(),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 12,
-                    ),
-                    prefixText: lot.mode == LotSizeMode.dollars ? '\$' : null,
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  onChanged: (t) {
-                    final v = double.tryParse(t.trim());
-                    if (v == null) return;
-                    _emit(amount: v);
-                  },
-                ),
-              ),
-              const SizedBox(width: 6),
-              SegmentedButton<LotSizeMode>(
-                showSelectedIcon: false,
-                style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: const WidgetStatePropertyAll(
-                    TextStyle(fontSize: 12),
-                  ),
-                ),
-                segments: const [
-                  ButtonSegment(value: LotSizeMode.shares, label: Text('sh')),
-                  ButtonSegment(value: LotSizeMode.dollars, label: Text('\$')),
-                ],
-                selected: {lot.mode},
-                onSelectionChanged: (s) => _emit(mode: s.first),
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
                 onPressed: widget.onRemove,
                 icon: const Icon(Icons.close, size: 18),
                 tooltip: 'Remove lot',
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Shares and/or cost — enter whichever you have; both = your basis.
+          Row(
+            children: [
+              Expanded(
+                child: _numField(
+                  _sharesCtrl,
+                  _sharesFocus,
+                  'Shares',
+                  onValue: (v) => _emit(shares: v, sharesSet: true),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _numField(
+                  _costCtrl,
+                  _costFocus,
+                  'Cost',
+                  prefix: '\$',
+                  onValue: (v) => _emit(cost: v, costSet: true),
+                ),
               ),
             ],
           ),
@@ -1603,8 +1632,9 @@ class _InfoTab extends StatelessWidget {
             'defaults to 71. Edit it anytime (tap “reset” to restore the '
             'fund’s value).\n'
             '3.  Enter your marginal tax rates — federal, state, local.\n'
-            '4.  (Optional) Add lots — real buy dates and amounts (shares or \$). '
-            'Give a lot a sell date and it books a realized gain; leave it blank '
+            '4.  (Optional) Add lots — real buy dates with a share count and/or '
+            'cost (enter both and that’s your exact basis). Give a lot a sell '
+            'date and it books a realized gain; leave it blank '
             'to hold to today. No lots = one share bought a year ago.\n'
             '5.  Tap Calculate.',
           ),

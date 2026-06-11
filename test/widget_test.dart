@@ -180,6 +180,12 @@ void main() {
     // Pump the screen with an injected client and let initState's
     // _loadSavedInputs settle first, so it can't overwrite text we enter next.
     Future<void> pumpScreen(WidgetTester tester, http.Client client) async {
+      // A tall surface so the form (which grows as lots are added) and the
+      // result card both fit without fighting the scroll position.
+      tester.view.physicalSize = const Size(1000, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(MaterialApp(home: YieldScreen(client: client)));
       await tester.pumpAndSettle();
     }
@@ -196,7 +202,12 @@ void main() {
         federal,
       );
       await tester.enterText(find.widgetWithText(TextField, 'State %'), state);
-      await tester.tap(find.widgetWithText(FilledButton, 'Calculate'));
+      // With lots added the form can exceed the test viewport; scroll the
+      // button into view before tapping.
+      final button = find.widgetWithText(FilledButton, 'Calculate');
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
       await tester.pumpAndSettle();
     }
 

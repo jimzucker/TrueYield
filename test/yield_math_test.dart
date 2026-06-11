@@ -588,6 +588,237 @@ void main() {
       expect(lo.incomeAmount, closeTo(10, _eps));
     });
   });
+
+  group('YieldMath.compute — lots', () {
+    // A flat-$100 year with two $1 distributions, used across the lot tests so
+    // expected numbers are derivable by hand.
+    List<DistributionEntry> twoDists() => [
+      DistributionEntry(date: _utc(2025, 7, 15), amount: 1.00),
+      DistributionEntry(date: _utc(2026, 1, 15), amount: 1.00),
+    ];
+    List<PriceBar> flatBars() => [
+      for (int m = 0; m < 13; m++)
+        PriceBar(date: _utc(2025, 6 + m), close: 100),
+    ];
+
+    test('no lots ≡ a single default lot (epoch-0, 1 share)', () {
+      YieldResult run(List<Lot>? lots) => YieldMath.compute(
+        ticker: 'EQ',
+        currentPrice: 100,
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        distributions: twoDists(),
+        priceBars: flatBars(),
+        rocPct: 71,
+        lots: lots,
+      );
+      final implicit = run(null);
+      final explicit = run([
+        Lot(
+          buyDate: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+          mode: LotSizeMode.shares,
+          amount: 1,
+        ),
+      ]);
+      // The default lot must reproduce the original per-share numbers exactly.
+      expect(explicit.nav, closeTo(implicit.nav, _eps));
+      expect(explicit.costBasis, closeTo(implicit.costBasis, _eps));
+      expect(explicit.incomeAmount, closeTo(implicit.incomeAmount, _eps));
+      expect(explicit.taxThisYear, closeTo(implicit.taxThisYear, _eps));
+      expect(explicit.dripShares, closeTo(implicit.dripShares, _eps));
+      expect(
+        explicit.totalReturnAfterTax,
+        closeTo(implicit.totalReturnAfterTax, _eps),
+      );
+      expect(implicit.isSinglePortfolioLot, isTrue);
+    });
+
+    test('two share lots with different buy dates aggregate by hand', () {
+      // Lot A (10 sh, bought before both dists): factor (1.01)^2.
+      // Lot B (10 sh, bought after the first dist): factor 1.01 (one dist).
+      final r = YieldMath.compute(
+        ticker: 'TWO',
+        currentPrice: 100,
+        federalPct: 0,
+        statePct: 0,
+        localPct: 0,
+        distributions: twoDists(),
+        priceBars: flatBars(),
+        lots: [
+          Lot(buyDate: _utc(2025, 6, 1), mode: LotSizeMode.shares, amount: 10),
+          Lot(buyDate: _utc(2025, 8, 1), mode: LotSizeMode.shares, amount: 10),
+        ],
+      );
+      expect(r.isSinglePortfolioLot, isFalse);
+      expect(r.lots.length, 2);
+      expect(r.totalCost, closeTo(2000, _eps));
+      // Lot A: 10×1.0201 = 10.201; Lot B: 10×1.01 = 10.10 → 20.301 shares.
+      expect(r.dripShares, closeTo(20.301, _eps));
+      expect(r.nav, closeTo(2030.10, 1e-9));
+      // Income (0 tax): A earns $2/sh on 10 sh, B earns $1/sh on 10 sh = 30.
+      expect(r.incomeAmount, closeTo(30, _eps));
+      expect(r.taxThisYear, closeTo(0, _eps));
+      // G/L is nav − cost basis (reinvested income is a basis add, not a gain):
+      // 2030.10 − (1020 + 1010) = 0.10.
+      expect(r.unrealizedGL, closeTo(0.10, 1e-9));
+      // Return on cost includes the reinvested income: 30.10 / 2000.
+      expect(r.totalReturnBeforeTax, closeTo(30.10 / 2000, _eps));
+    });
+
+    test('a dollar lot converts to shares at the buy-date price', () {
+      final r = YieldMath.compute(
+        ticker: 'USD',
+        currentPrice: 100,
+        federalPct: 0,
+        statePct: 0,
+        localPct: 0,
+        distributions: twoDists(),
+        priceBars: flatBars(),
+        lots: [
+          Lot(
+            buyDate: _utc(2025, 6, 1),
+            mode: LotSizeMode.dollars,
+            amount: 1000,
+          ),
+        ],
+      );
+      // $1000 ÷ $100 = 10 initial shares.
+      expect(r.lots.single.initialShares, closeTo(10, _eps));
+      expect(r.totalCost, closeTo(1000, _eps));
+    });
+
+    test('a lot bought after every distribution earns no income', () {
+      final r = YieldMath.compute(
+        ticker: 'LATE',
+        currentPrice: 100,
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        distributions: twoDists(),
+        priceBars: flatBars(),
+        lots: [
+          Lot(buyDate: _utc(2026, 5, 1), mode: LotSizeMode.shares, amount: 10),
+        ],
+      );
+      final lot = r.lots.single;
+      expect(lot.incomeAmount, closeTo(0, _eps));
+      expect(lot.finalShares, closeTo(10, _eps)); // no DRIP growth
+      expect(r.taxThisYear, closeTo(0, _eps));
+      expect(r.totalReturnBeforeTax, closeTo(0, _eps)); // flat price
+    });
+
+    test('per-distribution ROC overrides the global default', () {
+      final r = YieldMath.compute(
+        ticker: 'PDROC',
+        currentPrice: 100,
+        federalPct: 0,
+        statePct: 0,
+        localPct: 0,
+        distributions: [
+          DistributionEntry(date: _utc(2025, 7, 15), amount: 1.00, rocPct: 0),
+          DistributionEntry(date: _utc(2026, 1, 15), amount: 1.00, rocPct: 100),
+        ],
+        priceBars: flatBars(),
+        rocPct: 50, // ignored — both rows carry explicit ROC
+      );
+      // Only the 0%-ROC payout is taxable income → $1 per share.
+      expect(r.perShareIncome, closeTo(1.0, _eps));
+      expect(r.incomeAmount, closeTo(1.0, _eps));
+      expect(r.sumDistributions, closeTo(2.0, _eps));
+    });
+
+    test('print Portfolio (validated) — YMAG, three lots in app row order', () {
+      // Three lots at different buy dates, sized in shares and dollars. Mirrors
+      // tools/yield_ref.py portfolio_demo so the two can be eyeballed together.
+      final r = YieldMath.compute(
+        ticker: 'YMAG',
+        currentPrice: ymag_daily.kYMAGCurrentPrice,
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        distributions: ymag_daily.kYMAGDistributions,
+        priceBars: ymag_daily.kYMAGPriceBars,
+        rocPct: 71,
+        lots: [
+          Lot(buyDate: _utc(2025, 6, 1), mode: LotSizeMode.shares, amount: 100),
+          Lot(
+            buyDate: _utc(2025, 12, 1),
+            mode: LotSizeMode.dollars,
+            amount: 5000,
+          ),
+          Lot(buyDate: _utc(2026, 3, 1), mode: LotSizeMode.shares, amount: 50),
+        ],
+      );
+
+      // Aggregates must equal the sum of the per-lot breakdown.
+      expect(r.lots.length, 3);
+      expect(r.lots.fold<double>(0, (s, l) => s + l.nav), closeTo(r.nav, 1e-6));
+      expect(
+        r.lots.fold<double>(0, (s, l) => s + l.cost),
+        closeTo(r.totalCost, 1e-6),
+      );
+
+      const mon = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      String monthLabel(DateTime d) =>
+          "${mon[d.month - 1]} '${(d.year % 100).toString().padLeft(2, '0')}";
+      String money(double v) => '\$${v.toStringAsFixed(2)}';
+      String signed(double v) =>
+          '${v < 0 ? '−' : '+'}\$${v.abs().toStringAsFixed(2)}';
+      final buf = StringBuffer()
+        ..writeln()
+        ..writeln('Portfolio (validated) — YMAG  [roc 71%, tax 37%]')
+        ..writeln('-' * 60)
+        ..writeln(
+          '${'Lot'.padRight(10)}${'Shares'.padLeft(16)}'
+          '${'Cost'.padLeft(11)}${'Value'.padLeft(11)}${'G/L'.padLeft(11)}',
+        );
+      for (final l in r.lots) {
+        final sh =
+            '${l.initialShares.toStringAsFixed(2)}→${l.finalShares.toStringAsFixed(2)}';
+        buf.writeln(
+          '${monthLabel(l.buyDate).padRight(10)}${sh.padLeft(16)}'
+          '${money(l.cost).padLeft(11)}${money(l.nav).padLeft(11)}'
+          '${signed(l.unrealizedGL).padLeft(11)}',
+        );
+      }
+      final ti = r.lots.fold<double>(0, (s, l) => s + l.initialShares);
+      final tf = r.lots.fold<double>(0, (s, l) => s + l.finalShares);
+      buf
+        ..writeln(
+          '${'Total'.padRight(10)}'
+          '${'${ti.toStringAsFixed(2)}→${tf.toStringAsFixed(2)}'.padLeft(16)}'
+          '${money(r.totalCost).padLeft(11)}${money(r.nav).padLeft(11)}'
+          '${signed(r.unrealizedGL).padLeft(11)}',
+        )
+        ..writeln()
+        ..writeln(
+          'Total return after tax: '
+          '${(r.totalReturnAfterTax * 100).toStringAsFixed(2)}%',
+        );
+      // ignore: avoid_print
+      print(buf.toString());
+    });
+  });
+
+  group('yahooRangeFor', () {
+    final now = DateTime.utc(2026, 6, 1);
+    DateTime ago(int days) => now.subtract(Duration(days: days));
+    test('rounds the buy span up to a Yahoo range', () {
+      expect(yahooRangeFor(ago(100), now), '1y');
+      expect(yahooRangeFor(ago(366), now), '1y');
+      expect(yahooRangeFor(ago(367), now), '2y');
+      expect(yahooRangeFor(ago(731), now), '2y');
+      expect(yahooRangeFor(ago(732), now), '5y');
+      expect(yahooRangeFor(ago(1827), now), '5y');
+      expect(yahooRangeFor(ago(1828), now), '10y');
+      expect(yahooRangeFor(ago(3653), now), '10y');
+      expect(yahooRangeFor(ago(3654), now), 'max');
+    });
+  });
 }
 
 // Distribution timestamps from Yahoo are 13:30 UTC (US market 9:30 ET).

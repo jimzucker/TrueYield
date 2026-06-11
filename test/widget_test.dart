@@ -352,6 +352,70 @@ void main() {
       expect(find.textContaining('Lookup failed: HTTP 500'), findsOneWidget);
     });
 
+    testWidgets('adding two lots renders the portfolio grid', (tester) async {
+      final client = MockClient(
+        (req) async => http.Response(
+          yahooChartJson(
+            price: 100,
+            months: [
+              DateTime.utc(2025, 7),
+              DateTime.utc(2025, 10),
+              DateTime.utc(2026, 1),
+            ],
+            closes: [100, 100, 100],
+            dividends: {
+              DateTime.utc(2025, 7, 15): 1.0,
+              DateTime.utc(2025, 10, 15): 1.0,
+            },
+          ),
+          200,
+        ),
+      );
+      await pumpScreen(tester, client);
+
+      // No lots yet → the default-lot hint is shown.
+      expect(find.textContaining('Default: 1 share'), findsOneWidget);
+
+      await tester.tap(find.text('Add lot'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add lot'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Remove lot'), findsNWidgets(2));
+
+      await calculate(tester, ticker: 'PORT', federal: '32', state: '5');
+
+      // Two lots → the portfolio grid (header + totals) instead of the
+      // single-share reference grid.
+      expect(find.text('Total'), findsOneWidget);
+      expect(find.text('Value'), findsOneWidget);
+      expect(find.textContaining('across 2 lots'), findsOneWidget);
+    });
+
+    testWidgets('Distributions tab exposes an editable ROC % column', (
+      tester,
+    ) async {
+      final client = MockClient(
+        (req) async => http.Response(
+          yahooChartJson(
+            price: 100,
+            months: [DateTime.utc(2025, 7), DateTime.utc(2026, 1)],
+            closes: [100, 100],
+            dividends: {
+              DateTime.utc(2025, 7, 15): 1.0,
+              DateTime.utc(2026, 1, 15): 1.0,
+            },
+          ),
+          200,
+        ),
+      );
+      await pumpScreen(tester, client);
+      await calculate(tester, ticker: 'ROCED', federal: '32', state: '5');
+
+      await tester.tap(find.widgetWithText(Tab, 'Distributions'));
+      await tester.pumpAndSettle();
+      expect(find.text('ROC %'), findsOneWidget);
+    });
+
     testWidgets('editing an input clears a stale result', (tester) async {
       final client = MockClient(
         (req) async => http.Response(

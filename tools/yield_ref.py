@@ -33,28 +33,72 @@ def price_at(div_ts, bars):
     return None
 
 
-def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
-            roc_pct=0.0):
-    """dists: list[(ts, amount)], bars: list[(ts, close-or-None)] — both unsorted ok.
+def _roc_frac(pct):
+    return min(max(pct / 100.0, 0.0), 1.0)
 
-    Mirrors lib/main.dart YieldMath.compute: real broker-DRIP share growth plus
-    a return-of-capital-aware tax basis (see roc-cost-basis-and-gl memory)."""
+
+def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
+    """One lot's economics (Model A — income scales by the *initial* share count).
+
+    lot: dict {buyTs, mode 'shares'|'dollars', amount}. Distributions on or after
+    buyTs count; each may carry its own roc (asc holds (ts, amt, roc-or-None))."""
+    buy_price = price_at(lot["buyTs"], sorted_bars) or current_price
+    if lot["mode"] == "shares":
+        s = lot["amount"]
+    else:
+        s = lot["amount"] / buy_price if buy_price > 0 else 0.0
+
+    factor = 1.0
+    income_per_share = 0.0
+    for ts, amt, roc in asc:
+        if ts < lot["buyTs"]:
+            continue
+        p = price_at(ts, sorted_bars) or current_price
+        factor *= 1 + amt / p
+        income_per_share += amt * (1 - _roc_frac(roc if roc is not None else default_roc))
+
+    final_shares = s * factor
+    cost = s * buy_price
+    income = s * income_per_share
+    return {
+        "buyTs": lot["buyTs"],
+        "initialShares": s,
+        "buyPrice": buy_price,
+        "finalShares": final_shares,
+        "cost": cost,
+        "incomeAmount": income,
+        "taxThisYear": income * combined,
+        "nav": final_shares * current_price,
+        "costBasis": cost + income,
+        "unrealizedGL": final_shares * current_price - (cost + income),
+    }
+
+
+def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
+            roc_pct=0.0, lots=None):
+    """dists: list[(ts, amount)] or [(ts, amount, roc-or-None)]; bars: list[(ts,
+    close-or-None)] — both unsorted ok. lots: list of {buyTs, mode, amount} or
+    None for the single default lot.
+
+    Mirrors lib/main.dart YieldMath.compute: real broker-DRIP share growth, a
+    return-of-capital-aware tax basis (see roc-cost-basis-and-gl memory), and
+    per-lot aggregation (Model A)."""
     sorted_bars = sorted(bars, key=lambda b: b[0])
     if not dists:
         return {"qualifies": False, "reason": "no distributions in last 12 months"}
 
     combined = (fed_pct + state_pct + local_pct) / 100.0
-    asc = sorted(dists, key=lambda d: d[0])
+    # Normalize distributions to (ts, amt, roc-or-None).
+    norm = [(d[0], d[1], d[2] if len(d) > 2 else None) for d in dists]
+    asc = sorted(norm, key=lambda d: d[0])
 
     total = 0.0
-    cf_gross = 1.0
-    for ts, amt in asc:
+    per_share_income = 0.0
+    for ts, amt, roc in asc:
         total += amt
-        p = price_at(ts, sorted_bars) or current_price
-        cf_gross *= 1 + amt / p
+        per_share_income += amt * (1 - _roc_frac(roc if roc is not None else roc_pct))
 
     gross = total / current_price
-    drip_shares = cf_gross
 
     # First valid close ≈ price one year ago.
     start_price = current_price
@@ -63,18 +107,29 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
             start_price = c
             break
 
-    # Broker-DRIP + return-of-capital economics. Only the income portion is
-    # taxed now; ROC lowers basis (and cancels the basis added by reinvesting
-    # it), so basis = start price + reinvested income.
-    roc_frac = min(max(roc_pct / 100.0, 0.0), 1.0)
-    income_amount = total * (1 - roc_frac)
-    tax_this_year = income_amount * combined
-    nav = drip_shares * current_price
-    cost_basis = start_price + income_amount
+    # No explicit lots → one default lot (epoch 0, 1 share) → original per-share math.
+    eff_lots = lots if lots else [{"buyTs": 0, "mode": "shares", "amount": 1}]
+    lot_results = [
+        _compute_lot(l, asc, sorted_bars, current_price, combined, roc_pct)
+        for l in eff_lots
+    ]
+
+    total_cost = sum(l["cost"] for l in lot_results)
+    total_initial = sum(l["initialShares"] for l in lot_results)
+    total_final = sum(l["finalShares"] for l in lot_results)
+    income_amount = sum(l["incomeAmount"] for l in lot_results)
+    tax_this_year = sum(l["taxThisYear"] for l in lot_results)
+    nav = sum(l["nav"] for l in lot_results)
+    cost_basis = sum(l["costBasis"] for l in lot_results)
     unrealized_gl = nav - cost_basis
-    after_tax_yield_roc = (total - tax_this_year) / current_price
-    total_return_before_tax = (nav - start_price) / start_price
-    total_return_after_tax = (nav - tax_this_year - start_price) / start_price
+    drip_shares = total_final
+    cf_gross = (total_final / total_initial if total_initial > 0 else 1.0) - 1
+    per_share_tax = per_share_income * combined
+    after_tax_yield_roc = (total - per_share_tax) / current_price
+    total_return_before_tax = (nav - total_cost) / total_cost if total_cost > 0 else 0.0
+    total_return_after_tax = (
+        (nav - tax_this_year - total_cost) / total_cost if total_cost > 0 else 0.0
+    )
 
     return {
         "qualifies": True,
@@ -86,7 +141,7 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
         "startPrice": start_price,
         "sumDistributions": total,
         "grossYield": gross,
-        "compoundedGrossYield": cf_gross - 1,
+        "compoundedGrossYield": cf_gross,
         "dripShares": drip_shares,
         "incomeAmount": income_amount,
         "taxThisYear": tax_this_year,
@@ -96,6 +151,9 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
         "afterTaxYieldRoc": after_tax_yield_roc,
         "totalReturnBeforeTax": total_return_before_tax,
         "totalReturnAfterTax": total_return_after_tax,
+        "totalCost": total_cost,
+        "perShareIncome": per_share_income,
+        "lots": lot_results,
     }
 
 
@@ -188,6 +246,50 @@ def main():
         for k, _, _ in keys:
             v = r[k]
             print(f"  expect(result.{k}, closeTo({v:.6f}, 1e-5));")
+
+    portfolio_demo()
+
+
+def portfolio_demo():
+    """Multi-lot 'Portfolio (validated)' table for the YMAG fixture — the
+    reference for the Dart `print Portfolio (validated)` test (same row order as
+    the app's _PortfolioGrid: buy month, shares bought→now, cost, value, G/L)."""
+    try:
+        fx = load_fixture("/tmp/trueyield_fixtures/YMAG.json")
+    except (FileNotFoundError, KeyError):
+        print("\n(skip portfolio demo — YMAG fixture not on disk)")
+        return
+
+    # Three lots at different buy dates, sized in shares and dollars.
+    def ts(y, m, d):
+        return int(datetime(y, m, d, tzinfo=timezone.utc).timestamp())
+
+    lots = [
+        {"buyTs": ts(2025, 6, 1), "mode": "shares", "amount": 100},
+        {"buyTs": ts(2025, 12, 1), "mode": "dollars", "amount": 5000},
+        {"buyTs": ts(2026, 3, 1), "mode": "shares", "amount": 50},
+    ]
+    out = compute(
+        ticker=fx["ticker"], current_price=fx["currentPrice"],
+        fed_pct=32, state_pct=5, local_pct=0,
+        dists=fx["dists"], bars=fx["bars"], roc_pct=71.0, lots=lots,
+    )
+
+    def m(d):
+        return datetime.fromtimestamp(d, tz=timezone.utc).strftime("%b '%y")
+
+    print("\nPortfolio (validated) — YMAG  [roc 71%, tax 37%]")
+    print("-" * 60)
+    print(f"{'Lot':<10}{'Shares':>16}{'Cost':>11}{'Value':>11}{'G/L':>11}")
+    for l in out["lots"]:
+        sh = f"{l['initialShares']:.2f}->{l['finalShares']:.2f}"
+        print(f"{m(l['buyTs']):<10}{sh:>16}{l['cost']:>11.2f}"
+              f"{l['nav']:>11.2f}{l['unrealizedGL']:>+11.2f}")
+    ti = sum(l["initialShares"] for l in out["lots"])
+    tf = sum(l["finalShares"] for l in out["lots"])
+    print(f"{'Total':<10}{f'{ti:.2f}->{tf:.2f}':>16}{out['totalCost']:>11.2f}"
+          f"{out['nav']:>11.2f}{out['unrealizedGL']:>+11.2f}")
+    print(f"\nTotal return after tax: {out['totalReturnAfterTax'] * 100:+.2f}%")
 
 
 if __name__ == "__main__":

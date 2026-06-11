@@ -71,13 +71,89 @@ class TrueYieldApp extends StatelessWidget {
 class DistributionEntry {
   final DateTime date;
   final double amount;
-  const DistributionEntry({required this.date, required this.amount});
+  // Per-distribution return-of-capital %. null means "use the global default"
+  // (the ROC % the user typed on the Calculate tab). A non-null value is an
+  // override the user set on the Distributions tab, e.g. from a YieldMax 19a-1
+  // notice that gives the capital portion of that specific payout.
+  final double? rocPct;
+  const DistributionEntry({
+    required this.date,
+    required this.amount,
+    this.rocPct,
+  });
 }
 
 class PriceBar {
   final DateTime date;
   final double? close;
   const PriceBar({required this.date, required this.close});
+}
+
+/// How a lot's size was entered: a share count, or a dollar amount the app
+/// converts to shares using the price on the buy date.
+enum LotSizeMode { shares, dollars }
+
+/// One purchase: shares (or dollars) of the ticker bought on [buyDate], held to
+/// today (no sell date yet). The default single lot — 1 share bought at the
+/// start of the window — reproduces the app's original "one share a year ago"
+/// behavior exactly.
+class Lot {
+  final DateTime buyDate;
+  final LotSizeMode mode;
+  final double amount; // shares if mode == shares, else dollars invested
+
+  const Lot({required this.buyDate, required this.mode, required this.amount});
+
+  /// Resolve to an initial share count given the price on the buy date.
+  /// Dollars ÷ price; guards a zero/negative price.
+  double initialShares(double buyPrice) => mode == LotSizeMode.shares
+      ? amount
+      : (buyPrice > 0 ? amount / buyPrice : 0);
+
+  Map<String, dynamic> toJson() => {
+    'buyDate': buyDate.toUtc().millisecondsSinceEpoch,
+    'mode': mode.name,
+    'amount': amount,
+  };
+
+  factory Lot.fromJson(Map<String, dynamic> j) => Lot(
+    buyDate: DateTime.fromMillisecondsSinceEpoch(
+      (j['buyDate'] as num).toInt(),
+      isUtc: true,
+    ),
+    mode: LotSizeMode.values.byName(j['mode'] as String),
+    amount: (j['amount'] as num).toDouble(),
+  );
+}
+
+/// Per-lot economics under the broker-DRIP + return-of-capital model. Only
+/// distributions on or after [buyDate] count toward this lot; income scales by
+/// the lot's *initial* share count [initialShares] (Model A — keeps the single
+/// default lot identical to the original per-share math and verifiable by hand).
+class LotResult {
+  final DateTime buyDate;
+  final double initialShares; // S
+  final double buyPrice; // price resolved on buyDate
+  final double finalShares; // S × Π(1 + d/P) over this lot's distributions
+  final double cost; // S × buyPrice (dollars invested)
+  final double incomeAmount; // taxable income (S × Σ d·(1−roc))
+  final double taxThisYear; // incomeAmount × combined rate
+  final double nav; // finalShares × currentPrice
+  final double costBasis; // cost + reinvested income (ROC cancels — see memory)
+  final double unrealizedGL; // nav − costBasis
+
+  const LotResult({
+    required this.buyDate,
+    required this.initialShares,
+    required this.buyPrice,
+    required this.finalShares,
+    required this.cost,
+    required this.incomeAmount,
+    required this.taxThisYear,
+    required this.nav,
+    required this.costBasis,
+    required this.unrealizedGL,
+  });
 }
 
 class YieldResult {
@@ -116,6 +192,23 @@ class YieldResult {
   final double totalReturnBeforeTax;
   final double totalReturnAfterTax;
 
+  // ─── Lots. One entry per purchase; the aggregate dollar fields above
+  //     (nav/costBasis/incomeAmount/taxThisYear/unrealizedGL) are the sums over
+  //     these. For a single default lot they collapse to the original per-share
+  //     numbers, so startPrice/dripShares/costBasis keep their old meaning.
+  final List<LotResult> lots;
+  // Total dollars invested across all lots = Σ lot.cost. The cost denominator
+  // for the portfolio total return (the multi-lot analog of startPrice).
+  final double totalCost;
+  // Taxable income for exactly ONE share over all distributions (Σ d·(1−roc)),
+  // independent of lots. Powers the per-share yield lines and the
+  // Distributions-tab ROC split, which stay per-share concepts.
+  final double perShareIncome;
+
+  // True when the result is a single (default) lot — the UI then shows the
+  // original per-share statement + reference grid; otherwise a portfolio view.
+  bool get isSinglePortfolioLot => lots.length == 1;
+
   final List<DistributionEntry> distributions;
   final List<PriceBar> priceBars;
   final bool qualifies;
@@ -139,6 +232,9 @@ class YieldResult {
     required this.afterTaxYieldRoc,
     required this.totalReturnBeforeTax,
     required this.totalReturnAfterTax,
+    required this.lots,
+    required this.totalCost,
+    required this.perShareIncome,
     required this.distributions,
     required this.priceBars,
     required this.qualifies,
@@ -169,6 +265,9 @@ class YieldResult {
       afterTaxYieldRoc: 0,
       totalReturnBeforeTax: 0,
       totalReturnAfterTax: 0,
+      lots: const [],
+      totalCost: currentPrice,
+      perShareIncome: 0,
       distributions: const [],
       priceBars: priceBars,
       qualifies: false,
@@ -189,6 +288,9 @@ class YieldMath {
     required List<DistributionEntry> distributions,
     required List<PriceBar> priceBars,
     double rocPct = 0,
+    // One purchase per lot. null/empty → a single default lot (1 share bought at
+    // the start of the window), which reproduces the original per-share math.
+    List<Lot>? lots,
   }) {
     final sortedCloses = [...priceBars]
       ..sort((a, b) => a.date.compareTo(b.date));
@@ -206,20 +308,19 @@ class YieldMath {
     final ascDist = [...distributions]
       ..sort((a, b) => a.date.compareTo(b.date));
 
+    // Per-share, ticker-level figures (independent of lots): the advertised
+    // distribution total and the income portion under per-distribution ROC.
     double sum = 0;
-    double compoundFactorGross = 1;
-
+    double perShareIncome = 0;
     for (final d in ascDist) {
       sum += d.amount;
-      final priceAtDiv = priceAt(d.date, sortedCloses) ?? currentPrice;
-      compoundFactorGross *= 1 + d.amount / priceAtDiv;
+      perShareIncome += d.amount * (1 - _rocFrac(d.rocPct ?? rocPct));
     }
-
     final grossYield = sum / currentPrice;
-    final dripShares = compoundFactorGross;
 
     // First valid close ≈ price one year ago; falls back to currentPrice if
-    // every bar's close is null.
+    // every bar's close is null. Used as the default lot's buy price and the
+    // single-lot reference grid's "start" column.
     double startPrice = currentPrice;
     for (final bar in sortedCloses) {
       final c = bar.close;
@@ -229,18 +330,57 @@ class YieldMath {
       }
     }
 
-    // Broker-DRIP + return-of-capital economics. Only the income portion is
-    // taxed now; ROC lowers basis (and cancels the basis added by reinvesting
-    // it), so basis = startPrice + reinvested income. See roc-cost-basis-and-gl.
-    final rocFrac = (rocPct / 100.0).clamp(0.0, 1.0);
-    final incomeAmount = sum * (1 - rocFrac);
-    final taxThisYear = incomeAmount * combined;
-    final nav = dripShares * currentPrice;
-    final costBasis = startPrice + incomeAmount;
+    // No explicit lots → one default lot. Its buy date precedes every bar and
+    // distribution (epoch 0), so priceAt resolves to startPrice and all
+    // distributions count: the lot's economics equal the original 1-share path.
+    final effectiveLots = (lots == null || lots.isEmpty)
+        ? [
+            Lot(
+              buyDate: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+              mode: LotSizeMode.shares,
+              amount: 1,
+            ),
+          ]
+        : lots;
+
+    final lotResults = [
+      for (final lot in effectiveLots)
+        _computeLot(lot, ascDist, sortedCloses, currentPrice, combined, rocPct),
+    ];
+
+    // Portfolio aggregates = sums of the per-lot dollar quantities.
+    double totalCost = 0,
+        totalInitialShares = 0,
+        totalFinalShares = 0,
+        incomeAmount = 0,
+        taxThisYear = 0,
+        nav = 0,
+        costBasis = 0;
+    for (final l in lotResults) {
+      totalCost += l.cost;
+      totalInitialShares += l.initialShares;
+      totalFinalShares += l.finalShares;
+      incomeAmount += l.incomeAmount;
+      taxThisYear += l.taxThisYear;
+      nav += l.nav;
+      costBasis += l.costBasis;
+    }
     final unrealizedGL = nav - costBasis;
-    final afterTaxYieldRoc = (sum - taxThisYear) / currentPrice;
-    final totalReturnBeforeTax = (nav - startPrice) / startPrice;
-    final totalReturnAfterTax = (nav - taxThisYear - startPrice) / startPrice;
+    // dripShares = total shares now; growth is weighted by initial shares so the
+    // single default lot (1 → finalShares) keeps its old "1.00 → X" meaning.
+    final dripShares = totalFinalShares;
+    final compoundedGrossYield =
+        (totalInitialShares > 0 ? totalFinalShares / totalInitialShares : 1.0) -
+        1;
+    // The two yield lines stay per-share: deduct one share's worth of tax.
+    final perShareTax = perShareIncome * combined;
+    final afterTaxYieldRoc = (sum - perShareTax) / currentPrice;
+    final totalReturnBeforeTax = totalCost > 0
+        ? (nav - totalCost) / totalCost
+        : 0.0;
+    final totalReturnAfterTax = totalCost > 0
+        ? (nav - taxThisYear - totalCost) / totalCost
+        : 0.0;
 
     final descDist = [...distributions]
       ..sort((a, b) => b.date.compareTo(a.date));
@@ -250,7 +390,7 @@ class YieldMath {
       currentPrice: currentPrice,
       sumDistributions: sum,
       grossYield: grossYield,
-      compoundedGrossYield: compoundFactorGross - 1,
+      compoundedGrossYield: compoundedGrossYield,
       dripShares: dripShares,
       startPrice: startPrice,
       combinedRate: combined,
@@ -263,9 +403,56 @@ class YieldMath {
       afterTaxYieldRoc: afterTaxYieldRoc,
       totalReturnBeforeTax: totalReturnBeforeTax,
       totalReturnAfterTax: totalReturnAfterTax,
+      lots: lotResults,
+      totalCost: totalCost,
+      perShareIncome: perShareIncome,
       distributions: descDist,
       priceBars: sortedCloses,
       qualifies: true,
+    );
+  }
+
+  /// Return-of-capital fraction in [0, 1] from a percentage (clamped).
+  static double _rocFrac(double pct) => (pct / 100.0).clamp(0.0, 1.0);
+
+  /// Economics for one lot: DRIP its initial shares forward over the
+  /// distributions on or after its buy date (Model A — income scales by the
+  /// initial share count, not the growing DRIP count). [defaultRoc] is the
+  /// global ROC % applied to any distribution without its own override.
+  static LotResult _computeLot(
+    Lot lot,
+    List<DistributionEntry> ascDist,
+    List<PriceBar> sortedCloses,
+    double currentPrice,
+    double combined,
+    double defaultRoc,
+  ) {
+    final buyPrice = priceAt(lot.buyDate, sortedCloses) ?? currentPrice;
+    final s = lot.initialShares(buyPrice);
+
+    double factor = 1;
+    double incomePerShare = 0;
+    for (final d in ascDist) {
+      if (d.date.isBefore(lot.buyDate)) continue;
+      final priceAtDiv = priceAt(d.date, sortedCloses) ?? currentPrice;
+      factor *= 1 + d.amount / priceAtDiv;
+      incomePerShare += d.amount * (1 - _rocFrac(d.rocPct ?? defaultRoc));
+    }
+
+    final finalShares = s * factor;
+    final cost = s * buyPrice;
+    final incomeAmount = s * incomePerShare;
+    return LotResult(
+      buyDate: lot.buyDate,
+      initialShares: s,
+      buyPrice: buyPrice,
+      finalShares: finalShares,
+      cost: cost,
+      incomeAmount: incomeAmount,
+      taxThisYear: incomeAmount * combined,
+      nav: finalShares * currentPrice,
+      costBasis: cost + incomeAmount,
+      unrealizedGL: finalShares * currentPrice - (cost + incomeAmount),
     );
   }
 
@@ -318,6 +505,11 @@ YieldResult parseYahooChart(
   required double statePct,
   required double localPct,
   double rocPct = 0,
+  // Per-distribution ROC overrides keyed by the Yahoo dividend epoch (seconds).
+  // A matched entry overrides the global [rocPct] for that payout.
+  Map<int, double>? rocByDivEpoch,
+  // One purchase per lot; null/empty → the single default lot.
+  List<Lot>? lots,
 }) {
   final body = json.decode(responseBody) as Map<String, dynamic>;
   final chart = body['chart'] as Map<String, dynamic>?;
@@ -373,6 +565,7 @@ YieldResult parseYahooChart(
         DistributionEntry(
           date: DateTime.fromMillisecondsSinceEpoch(divTs * 1000, isUtc: true),
           amount: amt,
+          rocPct: rocByDivEpoch?[divTs],
         ),
       );
     }
@@ -387,7 +580,20 @@ YieldResult parseYahooChart(
     distributions: distributionList,
     priceBars: priceBars,
     rocPct: rocPct,
+    lots: lots,
   );
+}
+
+/// Smallest Yahoo `range` value that covers [earliestBuy] back from [now].
+/// The chart endpoint only accepts these discrete spans, so we round up. Pure
+/// (takes [now]) so it's unit-testable without the clock.
+String yahooRangeFor(DateTime earliestBuy, DateTime now) {
+  final days = now.difference(earliestBuy).inDays;
+  if (days <= 366) return '1y';
+  if (days <= 731) return '2y';
+  if (days <= 1827) return '5y';
+  if (days <= 3653) return '10y';
+  return 'max';
 }
 
 class YieldScreen extends StatefulWidget {
@@ -417,11 +623,20 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   // and the stale-on-a-new-day check; null whenever no result is displayed.
   DateTime? _resultFetchedAt;
 
+  // Purchases the user entered. Empty = the single default lot (1 share, ~1 year
+  // ago), preserving the original behavior with zero migration for old users.
+  List<Lot> _lots = [];
+  // Per-distribution ROC % overrides keyed by the Yahoo dividend epoch (seconds).
+  // Set from the Distributions tab; survives re-fetch because the key is stable.
+  Map<int, double> _rocOverrides = {};
+
   static const _kTicker = 'last_ticker';
   static const _kFederal = 'rate_federal';
   static const _kState = 'rate_state';
   static const _kLocal = 'rate_local';
   static const _kRoc = 'rate_roc';
+  static const _kLots = 'lots';
+  static const _kRocOverrides = 'roc_overrides';
 
   @override
   void initState() {
@@ -466,12 +681,38 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
 
   Future<void> _loadSavedInputs() async {
     final prefs = await SharedPreferences.getInstance();
+    // Corrupt JSON must never crash boot — fall back to the defaults.
+    List<Lot> lots = [];
+    Map<int, double> overrides = {};
+    try {
+      final raw = prefs.getString(_kLots);
+      if (raw != null) {
+        lots = [
+          for (final e in json.decode(raw) as List)
+            Lot.fromJson(e as Map<String, dynamic>),
+        ];
+      }
+    } catch (_) {
+      lots = [];
+    }
+    try {
+      final raw = prefs.getString(_kRocOverrides);
+      if (raw != null) {
+        overrides = (json.decode(raw) as Map<String, dynamic>).map(
+          (k, v) => MapEntry(int.parse(k), (v as num).toDouble()),
+        );
+      }
+    } catch (_) {
+      overrides = {};
+    }
     setState(() {
       _tickerCtrl.text = prefs.getString(_kTicker) ?? '';
       _federalCtrl.text = prefs.getString(_kFederal) ?? '';
       _stateCtrl.text = prefs.getString(_kState) ?? '';
       _localCtrl.text = prefs.getString(_kLocal) ?? '0';
       _rocCtrl.text = prefs.getString(_kRoc) ?? '71';
+      _lots = lots;
+      _rocOverrides = overrides;
     });
   }
 
@@ -482,6 +723,14 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     await prefs.setString(_kState, _stateCtrl.text);
     await prefs.setString(_kLocal, _localCtrl.text);
     await prefs.setString(_kRoc, _rocCtrl.text);
+    await prefs.setString(
+      _kLots,
+      json.encode([for (final l in _lots) l.toJson()]),
+    );
+    await prefs.setString(
+      _kRocOverrides,
+      json.encode(_rocOverrides.map((k, v) => MapEntry(k.toString(), v))),
+    );
   }
 
   @override
@@ -507,6 +756,71 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     });
   }
 
+  // null when no explicit lots → compute() uses the single default lot.
+  List<Lot>? _activeLots() => _lots.isEmpty ? null : _lots;
+
+  // Yahoo dividend epoch (seconds) — the stable key for a ROC override.
+  int _epochOf(DateTime d) => d.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+  // Mutate the lots and persist. A lot change can require a wider fetch range
+  // (an older buy date needs more history), so the shown card is dropped — the
+  // user re-taps Calculate, which refetches with the right range.
+  void _mutateLots(void Function() change) {
+    setState(() {
+      change();
+      _result = null;
+      _error = null;
+      _resultFetchedAt = null;
+    });
+    _saveInputs();
+  }
+
+  // Set or clear a per-distribution ROC override. Unlike a lot change, this
+  // needs no new data, so the shown result recomputes in place (live).
+  void _setRocOverride(int epoch, double? pct) {
+    setState(() {
+      if (pct == null) {
+        _rocOverrides.remove(epoch);
+      } else {
+        _rocOverrides[epoch] = pct;
+      }
+      _recomputeInPlace();
+    });
+    _saveInputs();
+  }
+
+  // Re-run the pure math on the already-fetched bars/distributions with the
+  // current lots, tax rates, and ROC overrides — no network. Caller wraps this
+  // in setState. No-op until a qualifying result exists.
+  void _recomputeInPlace() {
+    final r = _result;
+    if (r == null || !r.qualifies) return;
+    final fed = double.tryParse(_federalCtrl.text.trim()) ?? 0;
+    final state = double.tryParse(_stateCtrl.text.trim()) ?? 0;
+    final localText = _localCtrl.text.trim();
+    final local = double.tryParse(localText.isEmpty ? '0' : localText) ?? 0;
+    final rocText = _rocCtrl.text.trim();
+    final roc = double.tryParse(rocText.isEmpty ? '0' : rocText) ?? 0;
+    _result = YieldMath.compute(
+      ticker: r.ticker,
+      currentPrice: r.currentPrice,
+      federalPct: fed,
+      statePct: state,
+      localPct: local,
+      distributions: [
+        for (final d in r.distributions)
+          DistributionEntry(
+            date: d.date,
+            amount: d.amount,
+            rocPct: _rocOverrides[_epochOf(d.date)],
+          ),
+      ],
+      priceBars: r.priceBars,
+      rocPct: roc,
+      lots: _activeLots(),
+    );
+  }
+
   Future<void> _calculate() async {
     // Dismiss the keyboard the moment the user commits — otherwise it
     // covers the result card on smaller phones.
@@ -529,6 +843,17 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     if (roc == null || roc < 0 || roc > 100) {
       setState(() => _error = 'Return of capital % must be between 0 and 100.');
       return;
+    }
+    final now = DateTime.now();
+    for (final lot in _lots) {
+      if (lot.amount <= 0) {
+        setState(() => _error = 'Each lot must have a positive amount.');
+        return;
+      }
+      if (lot.buyDate.isAfter(now)) {
+        setState(() => _error = 'A lot buy date cannot be in the future.');
+        return;
+      }
     }
 
     setState(() {
@@ -578,8 +903,15 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     required double localPct,
     required double rocPct,
   }) async {
+    // Fetch enough history to cover the earliest lot; no lots → the default
+    // 1-year window (the original behavior).
+    final now = DateTime.now();
+    final earliestBuy = _lots.isEmpty
+        ? now.subtract(const Duration(days: 365))
+        : _lots.map((l) => l.buyDate).reduce((a, b) => a.isBefore(b) ? a : b);
+    final range = yahooRangeFor(earliestBuy, now);
     final uri = Uri.parse(
-      '$yahooBase/v8/finance/chart/$ticker?interval=1d&range=1y&events=div',
+      '$yahooBase/v8/finance/chart/$ticker?interval=1d&range=$range&events=div',
     );
     final client = widget.client ?? http.Client();
     try {
@@ -600,6 +932,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
         statePct: statePct,
         localPct: localPct,
         rocPct: rocPct,
+        rocByDivEpoch: _rocOverrides,
+        lots: _activeLots(),
       );
     } finally {
       // Only dispose clients we created; never close an injected one.
@@ -629,7 +963,12 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
           child: TabBarView(
             children: [
               _buildCalculateTab(context),
-              _DistributionsTab(result: _result),
+              _DistributionsTab(
+                result: _result,
+                rocOverrides: _rocOverrides,
+                defaultRoc: double.tryParse(_rocCtrl.text.trim()) ?? 0,
+                onRocChanged: _setRocOverride,
+              ),
               _PricesTab(result: _result),
               const _InfoTab(),
             ],
@@ -737,6 +1076,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
             ],
           ),
           const SizedBox(height: 16),
+          _buildLotsSection(context),
+          const SizedBox(height: 16),
           SizedBox(
             height: 52,
             child: FilledButton(
@@ -768,6 +1109,224 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
             ),
           if (_result != null)
             _ResultCard(result: _result!, fetchedAt: _resultFetchedAt),
+        ],
+      ),
+    );
+  }
+
+  // Lots editor: a card listing each purchase (buy date + size). Empty = the
+  // implicit default lot (1 share, ~1 year ago), so the original single-share
+  // flow needs no setup. Adding lots turns the result into a portfolio.
+  Widget _buildLotsSection(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 8, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Lots',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _mutateLots(() {
+                    // Seed a new lot ~1 year ago, 100 shares (a sensible start
+                    // the user edits). Default mode = shares.
+                    final now = DateTime.now();
+                    _lots.add(
+                      Lot(
+                        buyDate: DateTime.utc(now.year - 1, now.month, now.day),
+                        mode: LotSizeMode.shares,
+                        amount: 100,
+                      ),
+                    );
+                  }),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add lot'),
+                ),
+              ],
+            ),
+            if (_lots.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 2),
+                child: Text(
+                  'Default: 1 share bought ~1 year ago. Add lots to track real '
+                  'buy dates and amounts.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              for (int i = 0; i < _lots.length; i++)
+                _LotRow(
+                  key: ValueKey(i),
+                  lot: _lots[i],
+                  onChanged: (l) => _mutateLots(() => _lots[i] = l),
+                  onRemove: () => _mutateLots(() => _lots.removeAt(i)),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// One editable purchase row: buy date, amount, and a shares/dollars toggle.
+// Owns its amount controller (seeded once in initState) so parent rebuilds on
+// each keystroke don't fight the user's cursor.
+class _LotRow extends StatefulWidget {
+  final Lot lot;
+  final ValueChanged<Lot> onChanged;
+  final VoidCallback onRemove;
+  const _LotRow({
+    super.key,
+    required this.lot,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  @override
+  State<_LotRow> createState() => _LotRowState();
+}
+
+class _LotRowState extends State<_LotRow> {
+  late final TextEditingController _amountCtrl;
+  late final FocusNode _amountFocus;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountCtrl = TextEditingController(text: _fmt(widget.lot.amount));
+    _amountFocus = FocusNode();
+  }
+
+  // Rows are keyed by index, so removing a middle lot reuses this State for a
+  // different lot. When that happens (and we're not mid-edit), resync the field
+  // — but never disturb the user's active typing.
+  @override
+  void didUpdateWidget(_LotRow old) {
+    super.didUpdateWidget(old);
+    if (!_amountFocus.hasFocus && widget.lot.amount != old.lot.amount) {
+      final t = _fmt(widget.lot.amount);
+      if (_amountCtrl.text != t) _amountCtrl.text = t;
+    }
+  }
+
+  // Trim a trailing ".0" so "100.0" shows as "100" but "12.5" stays.
+  static String _fmt(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+
+  @override
+  void dispose() {
+    _amountFocus.dispose();
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final initial = widget.lot.buyDate.isAfter(now) ? now : widget.lot.buyDate;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 10),
+      lastDate: now,
+    );
+    if (picked == null) return;
+    widget.onChanged(
+      Lot(
+        buyDate: DateTime.utc(picked.year, picked.month, picked.day),
+        mode: widget.lot.mode,
+        amount: widget.lot.amount,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lot = widget.lot;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 4,
+            child: OutlinedButton(
+              onPressed: _pickDate,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 14,
+                ),
+              ),
+              child: Text(
+                fmtDateHuman(lot.buyDate),
+                style: const TextStyle(fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            flex: 3,
+            child: TextField(
+              controller: _amountCtrl,
+              focusNode: _amountFocus,
+              style: const TextStyle(fontSize: 15),
+              decoration: InputDecoration(
+                isDense: true,
+                border: const OutlineInputBorder(),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 12,
+                ),
+                prefixText: lot.mode == LotSizeMode.dollars ? '\$' : null,
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onChanged: (t) {
+                final v = double.tryParse(t.trim());
+                if (v == null) return;
+                widget.onChanged(
+                  Lot(buyDate: lot.buyDate, mode: lot.mode, amount: v),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
+          SegmentedButton<LotSizeMode>(
+            showSelectedIcon: false,
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 12)),
+            ),
+            segments: const [
+              ButtonSegment(value: LotSizeMode.shares, label: Text('sh')),
+              ButtonSegment(value: LotSizeMode.dollars, label: Text('\$')),
+            ],
+            selected: {lot.mode},
+            onSelectionChanged: (s) => widget.onChanged(
+              Lot(buyDate: lot.buyDate, mode: s.first, amount: lot.amount),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: widget.onRemove,
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: 'Remove lot',
+          ),
         ],
       ),
     );
@@ -1035,6 +1594,11 @@ class _ResultCard extends StatelessWidget {
     }
 
     final afterTaxValue = r.nav - r.taxThisYear;
+    final single = r.isSinglePortfolioLot;
+    final totalInitialShares = r.lots.fold<double>(
+      0,
+      (s, l) => s + l.initialShares,
+    );
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -1066,8 +1630,9 @@ class _ResultCard extends StatelessWidget {
             //     sum to it nested beneath (income + unrealized G/L − tax).
             _StmtRow(
               label: 'Total return after tax',
-              sub:
-                  '${_money(r.startPrice)} → ${_money(afterTaxValue)} on your start',
+              sub: single
+                  ? '${_money(r.startPrice)} → ${_money(afterTaxValue)} on your start'
+                  : '${_money(r.totalCost)} → ${_money(afterTaxValue)} on your cost',
               value: _signedPct(r.totalReturnAfterTax),
               valueColor: _signColor(r.totalReturnAfterTax),
               headline: true,
@@ -1078,9 +1643,14 @@ class _ResultCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 16),
               child: Text(
-                'DRIP grew your shares 1.00 → '
-                '${r.dripShares.toStringAsFixed(2)} '
-                '(+${(r.compoundedGrossYield * 100).toStringAsFixed(0)}%)',
+                single
+                    ? 'DRIP grew your shares 1.00 → '
+                          '${r.dripShares.toStringAsFixed(2)} '
+                          '(+${(r.compoundedGrossYield * 100).toStringAsFixed(0)}%)'
+                    : 'DRIP grew your shares ${totalInitialShares.toStringAsFixed(2)} → '
+                          '${r.dripShares.toStringAsFixed(2)} '
+                          'across ${r.lots.length} lots '
+                          '(+${(r.compoundedGrossYield * 100).toStringAsFixed(0)}%)',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.primary,
                   fontWeight: FontWeight.w600,
@@ -1090,9 +1660,10 @@ class _ResultCard extends StatelessWidget {
             const SizedBox(height: 8),
             _StmtRow(
               label: 'Income (taxable)',
-              sub:
-                  '${_money(r.sumDistributions)} × '
-                  '${(100 - r.rocPct).toStringAsFixed(0)}% (1−ROC)',
+              sub: single
+                  ? '${_money(r.sumDistributions)} × '
+                        '${(100 - r.rocPct).toStringAsFixed(0)}% (1−ROC)'
+                  : 'taxable portion of distributions',
               value: _signedMoney(r.incomeAmount),
               valueColor: _gain,
               nested: true,
@@ -1126,13 +1697,16 @@ class _ResultCard extends StatelessWidget {
             _StmtRow(
               label: 'After-tax yield',
               sub:
-                  'kept ${_money(r.sumDistributions - r.taxThisYear)} ÷ '
+                  'kept ${_money(r.sumDistributions - r.perShareIncome * r.combinedRate)} ÷ '
                   '${_money(r.currentPrice)}',
               value: _pctPlain(r.afterTaxYieldRoc),
             ),
             const Divider(height: 28),
 
-            _ReferenceGrid(result: r),
+            if (single)
+              _ReferenceGrid(result: r)
+            else
+              _PortfolioGrid(result: r),
           ],
         ),
       ),
@@ -1321,6 +1895,99 @@ class _ReferenceGrid extends StatelessWidget {
   }
 }
 
+// "Show your work" for a multi-lot portfolio: one row per lot (buy date, shares
+// bought → now, cost, value, G/L) plus a totals row. Replaces the single-share
+// reference grid when the user enters real lots.
+class _PortfolioGrid extends StatelessWidget {
+  final YieldResult result;
+  const _PortfolioGrid({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    final r = result;
+    final theme = Theme.of(context);
+    final headStyle = theme.textTheme.labelSmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final numStyle = theme.textTheme.bodySmall?.copyWith(
+      fontWeight: FontWeight.w600,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+
+    Widget cell(String t, {Color? color, bool head = false}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+      child: Text(
+        t,
+        textAlign: TextAlign.right,
+        style: head ? headStyle : numStyle?.copyWith(color: color),
+      ),
+    );
+
+    final totalInitial = r.lots.fold<double>(0, (s, l) => s + l.initialShares);
+    final totalFinal = r.lots.fold<double>(0, (s, l) => s + l.finalShares);
+
+    TableRow lotRow(LotResult l) => TableRow(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Text(_monthLabel(l.buyDate), style: theme.textTheme.bodySmall),
+        ),
+        cell(
+          '${l.initialShares.toStringAsFixed(2)}→${l.finalShares.toStringAsFixed(2)}',
+        ),
+        cell(_money(l.cost)),
+        cell(_money(l.nav)),
+        cell(_signedMoney(l.unrealizedGL), color: _signColor(l.unrealizedGL)),
+      ],
+    );
+
+    return Table(
+      columnWidths: const {
+        0: FlexColumnWidth(1.4),
+        1: IntrinsicColumnWidth(),
+        2: IntrinsicColumnWidth(),
+        3: IntrinsicColumnWidth(),
+        4: IntrinsicColumnWidth(),
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: [
+        TableRow(
+          children: [
+            cell('Lot', head: true),
+            cell('Shares', head: true),
+            cell('Cost', head: true),
+            cell('Value', head: true),
+            cell('G/L', head: true),
+          ],
+        ),
+        for (final l in r.lots) lotRow(l),
+        TableRow(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Text(
+                'Total',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            cell(
+              '${totalInitial.toStringAsFixed(2)}→${totalFinal.toStringAsFixed(2)}',
+            ),
+            cell(_money(r.totalCost)),
+            cell(_money(r.nav)),
+            cell(
+              _signedMoney(r.unrealizedGL),
+              color: _signColor(r.unrealizedGL),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 // ─── Shared formatting helpers (top-level so every widget reuses one copy) ───
 const _months = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
@@ -1366,7 +2033,20 @@ bool isStale(DateTime fetchedAt, DateTime now) =>
 
 class _DistributionsTab extends StatelessWidget {
   final YieldResult? result;
-  const _DistributionsTab({required this.result});
+  // Per-distribution ROC editing. [rocOverrides] are keyed by div epoch
+  // (seconds); a row with no override shows [defaultRoc]. [onRocChanged] sets
+  // (or clears, with null) an override and recomputes the result in place.
+  final Map<int, double> rocOverrides;
+  final double defaultRoc;
+  final void Function(int epoch, double? pct) onRocChanged;
+  const _DistributionsTab({
+    required this.result,
+    this.rocOverrides = const {},
+    this.defaultRoc = 0,
+    this.onRocChanged = _noop,
+  });
+
+  static void _noop(int epoch, double? pct) {}
 
   @override
   Widget build(BuildContext context) {
@@ -1398,9 +2078,13 @@ class _DistributionsTab extends StatelessWidget {
     final firstDate = r.distributions.last.date;
     final lastDate = r.distributions.first.date;
     final avg = total / r.distributions.length;
-    final rocAmount = total - r.incomeAmount;
-    final rocInt = r.rocPct.round();
-    final incInt = (100 - r.rocPct).round();
+    // Per-share figures — the ROC split is a per-share concept independent of
+    // the lots. With per-distribution ROC the effective rate is a blend.
+    final taxableIncome = r.perShareIncome;
+    final rocAmount = total - taxableIncome;
+    final taxThisYear = r.perShareIncome * r.combinedRate;
+    final rocInt = total > 0 ? (rocAmount / total * 100).round() : 0;
+    final incInt = 100 - rocInt;
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: r.distributions.length + 3,
@@ -1431,35 +2115,50 @@ class _DistributionsTab extends StatelessWidget {
                 ),
                 _StmtRow(
                   label: 'Taxable income ($incInt%)',
-                  value: _money(r.incomeAmount),
+                  value: _money(taxableIncome),
                   nested: true,
                 ),
                 _StmtRow(
                   label: 'Tax this year',
-                  value: _signedMoney(-r.taxThisYear),
+                  value: _signedMoney(-taxThisYear),
                   valueColor: _loss,
                   nested: true,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Tap a row’s ROC % to override it (e.g. from a YieldMax '
+                  '19a-1 notice). Blank = the $rocInt% default above.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           );
         }
         if (i == 1) {
+          final headStyle = theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          );
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Date',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
+                Expanded(flex: 4, child: Text('Date', style: headStyle)),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    'Amount',
+                    textAlign: TextAlign.right,
+                    style: headStyle,
                   ),
                 ),
-                Text(
-                  'Amount',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    'ROC %',
+                    textAlign: TextAlign.right,
+                    style: headStyle,
                   ),
                 ),
               ],
@@ -1489,17 +2188,107 @@ class _DistributionsTab extends StatelessWidget {
           );
         }
         final d = r.distributions[i - 2];
+        final epoch = d.date.toUtc().millisecondsSinceEpoch ~/ 1000;
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(fmtDateHuman(d.date)),
-              Text('\$${d.amount.toStringAsFixed(4)}'),
+              Expanded(flex: 4, child: Text(fmtDateHuman(d.date))),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  '\$${d.amount.toStringAsFixed(4)}',
+                  textAlign: TextAlign.right,
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: _RocCell(
+                  overrideRoc: rocOverrides[epoch],
+                  defaultRoc: defaultRoc,
+                  onChanged: (pct) => onRocChanged(epoch, pct),
+                ),
+              ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+// One editable ROC-% cell for a distribution row. Shows the override if set,
+// otherwise the default as a hint. Commits on submit/focus-loss; an empty value
+// clears the override (reverts to the default).
+class _RocCell extends StatefulWidget {
+  final double? overrideRoc;
+  final double defaultRoc;
+  final ValueChanged<double?> onChanged;
+  const _RocCell({
+    required this.overrideRoc,
+    required this.defaultRoc,
+    required this.onChanged,
+  });
+
+  @override
+  State<_RocCell> createState() => _RocCellState();
+}
+
+class _RocCellState extends State<_RocCell> {
+  late final TextEditingController _ctrl;
+  late final FocusNode _focus;
+
+  static String _fmt(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(
+      text: widget.overrideRoc == null ? '' : _fmt(widget.overrideRoc!),
+    );
+    _focus = FocusNode()..addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (!_focus.hasFocus) _commit();
+  }
+
+  void _commit() {
+    final t = _ctrl.text.trim();
+    if (t.isEmpty) {
+      widget.onChanged(null);
+      return;
+    }
+    final v = double.tryParse(t);
+    if (v != null && v >= 0 && v <= 100) widget.onChanged(v);
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocusChange);
+    _focus.dispose();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _ctrl,
+      focusNode: _focus,
+      textAlign: TextAlign.right,
+      style: const TextStyle(fontSize: 14),
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: _fmt(widget.defaultRoc),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        border: const OutlineInputBorder(),
+        suffixText: '%',
+      ),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onSubmitted: (_) => _commit(),
     );
   }
 }

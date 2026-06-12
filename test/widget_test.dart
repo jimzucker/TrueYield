@@ -56,8 +56,8 @@ void main() {
     expect(find.widgetWithText(Tab, 'Calculate'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Distributions'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Prices'), findsOneWidget);
-    expect(find.widgetWithText(Tab, 'Diagnostics'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Info'), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Diag'), findsOneWidget);
   });
 
   testWidgets('Diagnostics tab shows the holding-period scenarios', (
@@ -72,7 +72,7 @@ void main() {
     await tester.pumpWidget(const TrueYieldApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(Tab, 'Diagnostics'));
+    await tester.tap(find.widgetWithText(Tab, 'Diag'));
     await tester.pumpAndSettle();
 
     expect(find.text('No lots'), findsOneWidget);

@@ -748,7 +748,11 @@ List<DiagnosticScenario> buildDiagnostics(DateTime now) {
   );
 
   return [
-    DiagnosticScenario('No lots', '1 share, ~1y default (TTM view)', run(null)),
+    DiagnosticScenario(
+      'No lots',
+      '1 share held the full ~3y window · all distributions reinvested',
+      run(null),
+    ),
     DiagnosticScenario(
       '1 lot · 3 months',
       'held under 12 months · 100 sh',
@@ -1212,8 +1216,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
               Tab(text: 'Calculate'),
               Tab(text: 'Distributions'),
               Tab(text: 'Prices'),
-              Tab(text: 'Diagnostics'),
               Tab(text: 'Info'),
+              Tab(text: 'Diag'),
             ],
           ),
         ),
@@ -1228,8 +1232,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                 onRocChanged: _setRocOverride,
               ),
               _PricesTab(result: _result),
-              const _DiagnosticsTab(),
               const _InfoTab(),
+              const _DiagnosticsTab(),
             ],
           ),
         ),
@@ -1863,7 +1867,8 @@ class _DiagnosticCard extends StatelessWidget {
             row('Cost → value', '${_money(r.totalCost)} → ${_money(r.nav)}'),
             row(
               'Shares',
-              '${initial.toStringAsFixed(2)} → ${r.dripShares.toStringAsFixed(2)}',
+              '${_grouped(initial.toStringAsFixed(2))} → '
+                  '${_grouped(r.dripShares.toStringAsFixed(2))}',
             ),
             row('Distributions received', _money(r.distributionsReceived)),
             row('Income (taxable)', _signedMoney(r.incomeAmount), c: _gain),
@@ -2587,9 +2592,25 @@ final Color _gain = Colors.greenAccent.shade400;
 final Color _loss = Colors.redAccent.shade200;
 Color _signColor(double v) => v < 0 ? _loss : _gain;
 
-String _money(double v) => '\$${v.toStringAsFixed(2)}';
+// Group the integer part with commas so large figures read at a glance
+// ("$1,250.00" not "$1250.00"). No intl dependency — a tiny manual grouper.
+String _grouped(String fixed) {
+  final dot = fixed.indexOf('.');
+  final intPart = dot == -1 ? fixed : fixed.substring(0, dot);
+  final frac = dot == -1 ? '' : fixed.substring(dot);
+  final neg = intPart.startsWith('-');
+  final digits = neg ? intPart.substring(1) : intPart;
+  final buf = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) buf.write(',');
+    buf.write(digits[i]);
+  }
+  return '${neg ? '-' : ''}$buf$frac';
+}
+
+String _money(double v) => '\$${_grouped(v.toStringAsFixed(2))}';
 String _signedMoney(double v) =>
-    '${v < 0 ? '−' : '+'}\$${v.abs().toStringAsFixed(2)}';
+    '${v < 0 ? '−' : '+'}\$${_grouped(v.abs().toStringAsFixed(2))}';
 String _signedPct(double v) =>
     '${v < 0 ? '−' : '+'}${(v.abs() * 100).toStringAsFixed(1)}%';
 String _pctPlain(double v) => '${(v * 100).toStringAsFixed(1)}%';

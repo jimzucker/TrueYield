@@ -3300,6 +3300,12 @@ class _ResultCard extends StatelessWidget {
               const Divider(height: 28),
             ],
 
+            // A visual of the same components that sum to the total: start cost
+            // grows by income and gains, shrinks by taxes, lands at after-tax
+            // value.
+            _WaterfallChart(result: r, defaultView: defaultView),
+            const Divider(height: 28),
+
             if (defaultView)
               _ReferenceGrid(result: r)
             else
@@ -3309,6 +3315,183 @@ class _ResultCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// One step of the total-return waterfall. [isTotal] bars rise from zero
+/// (start cost / ending value); the rest float by [delta] from the running sum.
+class WaterfallStep {
+  final String label;
+  final double delta; // signed; for totals this is the absolute level
+  final bool isTotal;
+  const WaterfallStep(this.label, this.delta, {required this.isTotal});
+}
+
+/// The ordered waterfall steps for a result: start cost → +income → ±gains →
+/// −taxes → after-tax value. The signed deltas plus the start level equal the
+/// ending value (nav − income tax − capital-gains tax). Pure + testable.
+List<WaterfallStep> waterfallSteps(YieldResult r, {required bool defaultView}) {
+  final endVal = r.nav - r.taxThisYear - r.capGainsTax;
+  return [
+    WaterfallStep(defaultView ? 'Start' : 'Cost', r.totalCost, isTotal: true),
+    WaterfallStep('Income', r.incomeAmount, isTotal: false),
+    if (r.realizedGL != 0)
+      WaterfallStep('Real G/L', r.realizedGL, isTotal: false),
+    if (r.unrealizedGL != 0)
+      WaterfallStep('Paper G/L', r.unrealizedGL, isTotal: false),
+    WaterfallStep('Inc tax', -r.taxThisYear, isTotal: false),
+    if (r.capGainsTax != 0)
+      WaterfallStep('CG tax', -r.capGainsTax, isTotal: false),
+    WaterfallStep('Value', endVal, isTotal: true),
+  ];
+}
+
+/// Total-return waterfall: start cost → +income → ±gains → −taxes → after-tax
+/// value. Pure paint, no dependencies. Positive steps use the gain color,
+/// negative the loss color; the two totals are neutral bars from zero.
+class _WaterfallChart extends StatelessWidget {
+  final YieldResult result;
+  final bool defaultView;
+  const _WaterfallChart({required this.result, required this.defaultView});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 168,
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: _WaterfallPainter(
+          steps: waterfallSteps(result, defaultView: defaultView),
+          gain: gainColor(theme),
+          loss: lossColor(theme),
+          totalBar: theme.colorScheme.primary,
+          connector: theme.dividerColor,
+          textColor: theme.colorScheme.onSurface,
+          mutedColor: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+class _WaterfallPainter extends CustomPainter {
+  final List<WaterfallStep> steps;
+  final Color gain, loss, totalBar, connector, textColor, mutedColor;
+  _WaterfallPainter({
+    required this.steps,
+    required this.gain,
+    required this.loss,
+    required this.totalBar,
+    required this.connector,
+    required this.textColor,
+    required this.mutedColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (steps.isEmpty) return;
+    // Running cumulative per step + the bar's [bottom, top] value bounds.
+    final tops = <double>[];
+    final bottoms = <double>[];
+    double cum = 0;
+    for (final s in steps) {
+      if (s.isTotal) {
+        bottoms.add(0);
+        tops.add(s.delta);
+        cum = s.delta;
+      } else {
+        final b = cum;
+        cum += s.delta;
+        bottoms.add(b < cum ? b : cum);
+        tops.add(b < cum ? cum : b);
+      }
+    }
+    var maxV = 0.0, minV = 0.0;
+    for (var i = 0; i < steps.length; i++) {
+      if (tops[i] > maxV) maxV = tops[i];
+      if (bottoms[i] < minV) minV = bottoms[i];
+    }
+    if (maxV == minV) maxV = minV + 1;
+
+    const labelH = 16.0; // bottom band for category labels
+    const valueH = 14.0; // top band for value labels
+    final chartH = size.height - labelH - valueH;
+    final n = steps.length;
+    final slot = size.width / n;
+    final barW = slot * 0.6;
+    double y(double v) =>
+        valueH + chartH - ((v - minV) / (maxV - minV)) * chartH;
+
+    final barPaint = Paint()..style = PaintingStyle.fill;
+    final connPaint = Paint()
+      ..color = connector
+      ..strokeWidth = 1;
+
+    for (var i = 0; i < n; i++) {
+      final s = steps[i];
+      final cx = slot * i + slot / 2;
+      final left = cx - barW / 2;
+      final yTop = y(tops[i]);
+      final yBot = y(bottoms[i]);
+      barPaint.color = s.isTotal ? totalBar : (s.delta >= 0 ? gain : loss);
+      final rect = Rect.fromLTRB(left, yTop, left + barW, yBot);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(2)),
+        barPaint,
+      );
+      // Dotted-ish connector at this bar's running-total level to the next bar.
+      // The running total after a step is the bar's top (totals / rising steps)
+      // or its bottom (falling steps).
+      if (i < n - 1) {
+        final yLevel = y((s.isTotal || s.delta >= 0) ? tops[i] : bottoms[i]);
+        canvas.drawLine(
+          Offset(left + barW, yLevel),
+          Offset(slot * (i + 1) + slot / 2 - barW / 2, yLevel),
+          connPaint,
+        );
+      }
+      // Category label.
+      _label(
+        canvas,
+        s.label,
+        cx,
+        size.height - labelH + 2,
+        mutedColor,
+        9,
+        maxWidth: slot,
+      );
+      // Value label (signed delta for steps, level for totals).
+      final vText = s.isTotal
+          ? _money0(s.delta)
+          : (s.delta >= 0 ? '+' : '−') + _money0(s.delta.abs());
+      _label(canvas, vText, cx, yTop - valueH, textColor, 9, maxWidth: slot);
+    }
+  }
+
+  void _label(
+    Canvas canvas,
+    String text,
+    double cx,
+    double top,
+    Color color,
+    double fontSize, {
+    required double maxWidth,
+  }) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(color: color, fontSize: fontSize),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: maxWidth);
+    tp.paint(canvas, Offset(cx - tp.width / 2, top));
+  }
+
+  @override
+  bool shouldRepaint(_WaterfallPainter old) => old.steps != steps;
 }
 
 class _StatusChip extends StatelessWidget {
@@ -3758,6 +3941,160 @@ bool isStale(DateTime fetchedAt, DateTime now) =>
     fetchedAt.year != now.year ||
     fetchedAt.month != now.month ||
     fetchedAt.day != now.day;
+
+/// A compact price line over the fetched window with a tick under each
+/// distribution date. Pure paint, no dependencies.
+class _PriceSparkline extends StatelessWidget {
+  final YieldResult result;
+  const _PriceSparkline({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Ascending bars with a non-null close; the line needs at least two points.
+    final bars = [...result.priceBars]
+      ..sort((a, b) => a.date.compareTo(b.date));
+    final pts = <({DateTime date, double close})>[
+      for (final b in bars)
+        if (b.close != null) (date: b.date, close: b.close!),
+    ];
+    if (pts.length < 2) return const SizedBox.shrink();
+    final divDates = [for (final d in result.distributions) d.date];
+    return SizedBox(
+      height: 96,
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: _SparklinePainter(
+          points: pts,
+          divDates: divDates,
+          line: theme.colorScheme.primary,
+          fill: theme.colorScheme.primary.withValues(alpha: 0.12),
+          tick: theme.colorScheme.tertiary,
+          textColor: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  final List<({DateTime date, double close})> points;
+  final List<DateTime> divDates;
+  final Color line, fill, tick, textColor;
+  _SparklinePainter({
+    required this.points,
+    required this.divDates,
+    required this.line,
+    required this.fill,
+    required this.tick,
+    required this.textColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    const labelH = 14.0; // endpoint price labels at the bottom
+    const tickH = 6.0; // distribution tick band above the labels
+    final chartH = size.height - labelH - tickH;
+    final t0 = points.first.date.millisecondsSinceEpoch.toDouble();
+    final t1 = points.last.date.millisecondsSinceEpoch.toDouble();
+    final span = (t1 - t0) == 0 ? 1.0 : (t1 - t0);
+    var hi = points.first.close, lo = points.first.close;
+    for (final p in points) {
+      if (p.close > hi) hi = p.close;
+      if (p.close < lo) lo = p.close;
+    }
+    if (hi == lo) hi = lo + 1;
+    double x(DateTime d) =>
+        ((d.millisecondsSinceEpoch - t0) / span) * size.width;
+    double y(double v) => ((hi - v) / (hi - lo)) * chartH;
+
+    final path = Path();
+    for (var i = 0; i < points.length; i++) {
+      final px = x(points[i].date);
+      final py = y(points[i].close);
+      if (i == 0) {
+        path.moveTo(px, py);
+      } else {
+        path.lineTo(px, py);
+      }
+    }
+    // Soft fill under the line.
+    final fillPath = Path.from(path)
+      ..lineTo(x(points.last.date), chartH)
+      ..lineTo(x(points.first.date), chartH)
+      ..close();
+    canvas.drawPath(fillPath, Paint()..color = fill);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = line
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    // Distribution ticks just below the chart.
+    final tickPaint = Paint()
+      ..color = tick
+      ..strokeWidth = 1.5;
+    for (final d in divDates) {
+      final ms = d.millisecondsSinceEpoch.toDouble();
+      if (ms < t0 || ms > t1) continue;
+      final tx = x(d);
+      canvas.drawLine(
+        Offset(tx, chartH + 1),
+        Offset(tx, chartH + tickH),
+        tickPaint,
+      );
+    }
+
+    // Endpoint price labels.
+    _label(
+      canvas,
+      _money(points.first.close),
+      0,
+      size.height - labelH + 1,
+      textColor,
+      TextAlign.left,
+      size.width,
+    );
+    _label(
+      canvas,
+      _money(points.last.close),
+      0,
+      size.height - labelH + 1,
+      textColor,
+      TextAlign.right,
+      size.width,
+    );
+  }
+
+  void _label(
+    Canvas canvas,
+    String text,
+    double left,
+    double top,
+    Color color,
+    TextAlign align,
+    double width,
+  ) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(color: color, fontSize: 10),
+      ),
+      textAlign: align,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: width);
+    final dx = align == TextAlign.right ? width - tp.width : left;
+    tp.paint(canvas, Offset(dx, top));
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter old) =>
+      old.points != points || old.divDates != divDates;
+}
 
 class _DistributionsTab extends StatelessWidget {
   final YieldResult? result;
@@ -4230,6 +4567,8 @@ class _PricesTab extends StatelessWidget {
                     color: null,
                   ),
                 ]),
+                const SizedBox(height: 14),
+                _PriceSparkline(result: r),
               ],
             ),
           );

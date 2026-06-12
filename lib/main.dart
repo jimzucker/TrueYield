@@ -1755,6 +1755,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
               for (int i = 0; i < _lots.length; i++)
                 _LotRow(
                   key: ValueKey(i),
+                  index: i + 1,
                   lot: _lots[i],
                   closeOn: _closeOn,
                   defaultPrice: _closeOn(_lots[i].buyDate),
@@ -1773,6 +1774,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
 // each keystroke don't fight the user's cursor. [closeOn] returns the close on a
 // date when prices are available, so changing the buy date refreshes the cost.
 class _LotRow extends StatefulWidget {
+  final int index;
   final Lot lot;
   final double? Function(DateTime) closeOn;
   // The close on the lot's buy date (when known), used to pre-fill the Price
@@ -1782,6 +1784,7 @@ class _LotRow extends StatefulWidget {
   final VoidCallback onRemove;
   const _LotRow({
     super.key,
+    required this.index,
     required this.lot,
     required this.closeOn,
     required this.defaultPrice,
@@ -1907,20 +1910,33 @@ class _LotRowState extends State<_LotRow> {
 
   void _clearSell() => _emit(keepSell: false);
 
-  Widget _dateButton(String label, VoidCallback onTap) => OutlinedButton(
-    onPressed: onTap,
-    style: OutlinedButton.styleFrom(
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      visualDensity: VisualDensity.compact,
-    ),
-    child: Text(
-      label,
-      style: const TextStyle(fontSize: 12),
-      overflow: TextOverflow.ellipsis,
-      maxLines: 1,
-    ),
-  );
+  Widget _dateButton(String label, VoidCallback onTap, {bool muted = false}) {
+    final theme = Theme.of(context);
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        visualDensity: VisualDensity.compact,
+        foregroundColor: muted ? theme.colorScheme.onSurfaceVariant : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.event, size: 14),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _numField(
     TextEditingController ctrl,
@@ -1969,15 +1985,59 @@ class _LotRowState extends State<_LotRow> {
           border: Border.all(color: theme.dividerColor),
           borderRadius: BorderRadius.circular(8),
         ),
-        padding: const EdgeInsets.fromLTRB(8, 8, 4, 8),
+        padding: const EdgeInsets.fromLTRB(12, 8, 6, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Both dates on one row, plus remove.
+            // Header: which lot, its status, and remove.
+            Row(
+              children: [
+                Text(
+                  'Lot ${widget.index}',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: lot.isClosed
+                        ? theme.colorScheme.tertiaryContainer
+                        : theme.colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    lot.isClosed ? 'Sold' : 'Open',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: lot.isClosed
+                          ? theme.colorScheme.onTertiaryContainer
+                          : theme.colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
+                  onPressed: widget.onRemove,
+                  icon: const Icon(Icons.close, size: 18),
+                  tooltip: 'Remove lot',
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            // Buy and (optional) sell dates.
             Row(
               children: [
                 Expanded(
-                  flex: 5,
                   child: _dateButton(
                     'Buy ${fmtDateHuman(lot.buyDate)}',
                     _pickBuyDate,
@@ -1985,12 +2045,12 @@ class _LotRowState extends State<_LotRow> {
                 ),
                 const SizedBox(width: 6),
                 Expanded(
-                  flex: 5,
                   child: _dateButton(
                     lot.isClosed
-                        ? 'Sold ${fmtDateHuman(lot.sellDate!)}'
-                        : 'Held',
+                        ? 'Sell ${fmtDateHuman(lot.sellDate!)}'
+                        : 'Add sell date',
                     _pickSellDate,
+                    muted: !lot.isClosed,
                   ),
                 ),
                 if (lot.isClosed)
@@ -2004,19 +2064,9 @@ class _LotRowState extends State<_LotRow> {
                     icon: const Icon(Icons.undo, size: 16),
                     tooltip: 'Clear sell date (hold)',
                   ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(
-                    minWidth: 44,
-                    minHeight: 44,
-                  ),
-                  onPressed: widget.onRemove,
-                  icon: const Icon(Icons.close, size: 18),
-                  tooltip: 'Remove lot',
-                ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             // Qty × Price = Principal (principal is computed, read-only).
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -2026,11 +2076,14 @@ class _LotRowState extends State<_LotRow> {
                   child: _numField(
                     _qtyCtrl,
                     _qtyFocus,
-                    'Qty',
+                    'Shares',
                     onValue: (v) => _emit(shares: v, sharesSet: true),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child: Text('×'),
+                ),
                 Expanded(
                   flex: 4,
                   child: _numField(
@@ -2041,7 +2094,7 @@ class _LotRowState extends State<_LotRow> {
                     onValue: (v) => _emit(price: v, priceSet: true),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 10),
                 Expanded(
                   flex: 4,
                   child: Column(
@@ -2049,13 +2102,13 @@ class _LotRowState extends State<_LotRow> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Principal',
+                        'Cost basis',
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                       Text(
-                        principal == null ? '@ mkt' : _money(principal),
+                        principal == null ? 'at close' : _money(principal),
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                           fontFeatures: const [FontFeature.tabularFigures()],
@@ -2158,28 +2211,61 @@ class _LotDetailCard extends StatelessWidget {
     final l = lot;
     final growthPct = (l.sharesGrowth * 100);
 
-    Widget kv(String k, String v, {Color? color}) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            k,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+    // A compact stat block (muted label over a bold tabular value) — two per
+    // row so the card reads as a table and fills the width instead of one tall
+    // column of label-left / value-right rows.
+    Widget stat(String k, String v, {Color? color}) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          k,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
-          Text(
-            v,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: color,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+        ),
+        Text(
+          v,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: color,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
-        ],
-      ),
+        ),
+      ],
     );
+
+    final cells = <Widget>[
+      stat('Bought', '${fmtDateHuman(l.buyDate)} @ ${_money(l.buyPrice)}'),
+      stat(
+        l.isClosed ? 'Sold' : 'Held',
+        l.isClosed
+            ? '${fmtDateHuman(l.sellDate!)} @ ${_money(l.sellPrice!)}'
+            : 'to today @ ${_money(currentPrice)}',
+      ),
+      stat(
+        'Shares (DRIP)',
+        '${fmtShares(l.initialShares)} → ${fmtShares(l.finalShares)} '
+            '(+${growthPct.toStringAsFixed(growthPct < 10 ? 1 : 0)}%)',
+      ),
+      stat('Principal (cost)', _money(l.cost)),
+      stat('Distributions', _money(l.distributions)),
+      stat(
+        'Income (taxable)',
+        _signedMoney(l.incomeAmount),
+        color: gainColor(theme),
+      ),
+      stat(l.isClosed ? 'Value at sale' : 'Value now', _money(l.nav)),
+      stat(
+        'Tax this year',
+        _signedMoney(-l.taxThisYear),
+        color: lossColor(theme),
+      ),
+      stat(
+        l.isClosed ? 'Realized G/L' : 'Unrealized G/L',
+        _signedMoney(l.gl),
+        color: signColor(theme, l.gl),
+      ),
+    ];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -2223,38 +2309,24 @@ class _LotDetailCard extends StatelessWidget {
               ],
             ),
             const Divider(height: 18),
-            kv('Bought', '${fmtDateHuman(l.buyDate)} @ ${_money(l.buyPrice)}'),
-            kv(
-              l.isClosed ? 'Sold' : 'Held',
-              l.isClosed
-                  ? '${fmtDateHuman(l.sellDate!)} @ ${_money(l.sellPrice!)}'
-                  : 'to today @ ${_money(currentPrice)}',
-            ),
-            kv(
-              'Shares (DRIP)',
-              '${fmtShares(l.initialShares)} → ${fmtShares(l.finalShares)} '
-                  '(+${growthPct.toStringAsFixed(growthPct < 10 ? 1 : 0)}%)',
-            ),
-            kv('Principal (cost)', _money(l.cost)),
-            kv('Distributions received', _money(l.distributions)),
-            kv(
-              'Income (taxable)',
-              _signedMoney(l.incomeAmount),
-              color: gainColor(theme),
-            ),
-            kv(
-              'Tax this year',
-              _signedMoney(-l.taxThisYear),
-              color: lossColor(theme),
-            ),
-            kv(l.isClosed ? 'Value at sale' : 'Value now', _money(l.nav)),
-            kv(
-              l.isClosed ? 'Realized G/L' : 'Unrealized G/L',
-              _signedMoney(l.gl),
-              color: signColor(theme, l.gl),
-            ),
+            for (var i = 0; i < cells.length; i += 2)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: cells[i]),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: i + 1 < cells.length
+                          ? cells[i + 1]
+                          : const SizedBox(),
+                    ),
+                  ],
+                ),
+              ),
             const Divider(height: 18),
-            kv(
+            stat(
               'Total return (after tax)',
               _signedPct(l.totalReturnAfterTax),
               color: signColor(theme, l.totalReturnAfterTax),
@@ -2681,8 +2753,8 @@ class _InfoTab extends StatelessWidget {
   }
 }
 
-/// A collapsible Info-tab section so the page opens compact instead of as one
-/// long wall of text. Header matches the always-visible section style.
+/// An always-visible Info-tab section: a bold header followed by its content
+/// (no collapsing — the guide is short enough to read top to bottom).
 class _InfoSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -2691,21 +2763,20 @@ class _InfoSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Theme(
-      data: theme.copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        title: Text(
-          title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
-        tilePadding: EdgeInsets.zero,
-        expandedAlignment: Alignment.topLeft,
-        expandedCrossAxisAlignment: CrossAxisAlignment.start,
-        childrenPadding: const EdgeInsets.only(bottom: 8),
-        children: children,
-      ),
+        ...children,
+      ],
     );
   }
 }
@@ -3549,10 +3620,12 @@ class _DistributionsTab extends StatelessWidget {
         }
         if (i == 1) {
           final headStyle = theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurfaceVariant,
           );
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          return Container(
+            color: theme.colorScheme.surfaceContainerHighest,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
             child: Row(
               children: [
                 Expanded(flex: 5, child: Text('Date', style: headStyle)),
@@ -3877,11 +3950,12 @@ class _PricesTab extends StatelessWidget {
         }
         if (i == 1) {
           final head = theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             color: theme.colorScheme.onSurfaceVariant,
           );
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          return Container(
+            color: theme.colorScheme.surfaceContainerHighest,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
             child: Row(
               children: [
                 Expanded(flex: 5, child: Text('Date', style: head)),

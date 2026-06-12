@@ -469,12 +469,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byTooltip('Remove lot'), findsNWidgets(2));
 
-      // Each lot has a Qty/Price/Principal row and a sell control defaulting to
-      // "Held".
-      expect(find.widgetWithText(TextField, 'Qty'), findsNWidgets(2));
+      // Each lot has a Shares/Price/Cost-basis row and an open sell control.
+      expect(find.widgetWithText(TextField, 'Shares'), findsNWidgets(2));
       expect(find.widgetWithText(TextField, 'Price'), findsNWidgets(2));
-      expect(find.text('Principal'), findsNWidgets(2));
-      expect(find.widgetWithText(OutlinedButton, 'Held'), findsNWidgets(2));
+      expect(find.text('Cost basis'), findsNWidgets(2));
+      expect(
+        find.widgetWithText(OutlinedButton, 'Add sell date'),
+        findsNWidgets(2),
+      );
 
       await calculate(tester, ticker: 'PORT', federal: '32', state: '5');
 
@@ -586,7 +588,7 @@ void main() {
       await tester.tap(find.text('Add lot'));
       await tester.pumpAndSettle();
       // Clear the seeded quantity.
-      await tester.enterText(find.widgetWithText(TextField, 'Qty'), '');
+      await tester.enterText(find.widgetWithText(TextField, 'Shares'), '');
       await calculate(tester, ticker: 'NOQTY');
       expect(find.textContaining('positive quantity'), findsOneWidget);
     });

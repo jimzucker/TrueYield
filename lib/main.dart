@@ -1568,8 +1568,9 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
               Padding(
                 padding: const EdgeInsets.only(top: 2, bottom: 2),
                 child: Text(
-                  'Default: 1 share bought ~1 year ago. Add lots to track real '
-                  'buy dates and amounts.',
+                  'Default: 1 share held ~1 year (the TTM view). Tap “Add lot” '
+                  'to use your real shares — each new lot starts at 100 shares '
+                  'bought today, ready to edit.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

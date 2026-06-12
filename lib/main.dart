@@ -2828,30 +2828,37 @@ class _InfoTab extends StatelessWidget {
             ],
           ),
           const Divider(height: 12),
-          Text('About', style: section),
-          const SizedBox(height: 8),
-          const _AboutLink(
-            label: 'Project & README',
-            url: 'https://github.com/jimzucker/TrueYield#readme',
+          Text('Links', style: section),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 18,
+            runSpacing: 2,
+            children: [
+              const _AboutLink(
+                label: 'Project & README',
+                url: 'https://github.com/jimzucker/TrueYield#readme',
+              ),
+              const _AboutLink(
+                label: 'License (Apache 2.0)',
+                url: 'https://github.com/jimzucker/TrueYield/blob/main/LICENSE',
+              ),
+              const _AboutLink(
+                label: 'Privacy policy',
+                url:
+                    'https://github.com/jimzucker/TrueYield/blob/main/PRIVACY.md',
+              ),
+              _AboutLink(
+                icon: Icons.article_outlined,
+                label: 'Open-source licenses',
+                onTap: () => showLicensePage(
+                  context: context,
+                  applicationName: 'TrueYield',
+                  applicationLegalese: '© 2026 James A. Zucker · Apache-2.0',
+                ),
+              ),
+            ],
           ),
-          const _AboutLink(
-            label: 'License (Apache 2.0)',
-            url: 'https://github.com/jimzucker/TrueYield/blob/main/LICENSE',
-          ),
-          const _AboutLink(
-            label: 'Privacy policy',
-            url: 'https://github.com/jimzucker/TrueYield/blob/main/PRIVACY.md',
-          ),
-          _AboutLink(
-            icon: Icons.article_outlined,
-            label: 'Open-source licenses',
-            onTap: () => showLicensePage(
-              context: context,
-              applicationName: 'TrueYield',
-              applicationLegalese: '© 2026 James A. Zucker · Apache-2.0',
-            ),
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Text(
             '© 2026 James A. Zucker · Apache-2.0\n'
             'Not affiliated with Yahoo. Yahoo and Yahoo Finance are trademarks of '
@@ -2985,31 +2992,24 @@ class _AboutLink extends StatelessWidget {
     final color = Theme.of(context).colorScheme.primary;
     return InkWell(
       onTap: onTap ?? _launch,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 36),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 16, color: color),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w600,
-                      decoration: TextDecoration.underline,
-                      decorationColor: color,
-                    ),
-                  ),
-                ),
-              ],
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.underline,
+                decorationColor: color,
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

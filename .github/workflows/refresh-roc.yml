@@ -1,0 +1,55 @@
+name: Refresh ROC + price history
+
+# Rebuilds the committed history datasets from source each weekday evening and
+# commits any changes, so the deployed app (which bundles lib/roc_*.dart) and the
+# downloadable CSVs stay current without manual runs. Also runnable on demand.
+on:
+  schedule:
+    # 22:00 UTC ≈ 5 PM EST / 6 PM EDT, weekdays (after US market close).
+    - cron: '0 22 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-roc
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pypdf
+
+      # dart format keeps the generated .dart files clean so CI stays green.
+      - uses: dart-lang/setup-dart@v1
+
+      - name: Refresh daily prices + distributions
+        run: python3 tools/refresh_prices.py
+
+      - name: Refresh YieldMax ROC (best-effort — skips if no notices posted)
+        run: python3 tools/refresh_roc.py || echo "no YieldMax notices fetched"
+
+      - name: Refresh other-issuer ROC history
+        run: python3 tools/roc_sources.py
+
+      - name: Format generated Dart
+        run: dart format lib/roc_data.dart lib/roc_history.dart
+
+      - name: Commit any changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ lib/roc_data.dart lib/roc_history.dart
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: daily refresh of ROC + price history"
+            git push
+          fi

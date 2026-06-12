@@ -112,6 +112,12 @@ void main() {
     expect(find.text('Reading the result'), findsOneWidget);
     expect(find.text('Disclaimers'), findsOneWidget);
     expect(find.text('Project & README'), findsOneWidget);
+
+    // Bundled ROC-data summary: funds / distributions / last updated.
+    expect(find.text('Bundled ROC data'), findsOneWidget);
+    expect(find.text('funds'), findsOneWidget);
+    expect(find.text('distributions'), findsOneWidget);
+    expect(find.text('last updated'), findsOneWidget);
   });
 
   testWidgets('empty data tabs show "Run Calculate to populate."', (

@@ -22,6 +22,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'roc_data.dart';
+import 'roc_history.dart';
 
 /// Trailing return-of-capital % for [ticker] from the bundled YieldMax 19a-1
 /// data ([kRocByTicker]), or null if the fund isn't known. Case-insensitive.
@@ -2445,6 +2446,11 @@ class _InfoTab extends StatelessWidget {
     final section = theme.textTheme.titleMedium?.copyWith(
       fontWeight: FontWeight.w700,
     );
+    final rocFunds = kRocByTickerByEpoch.length;
+    final rocPoints = kRocByTickerByEpoch.values.fold<int>(
+      0,
+      (sum, m) => sum + m.length,
+    );
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       child: Column(
@@ -2516,6 +2522,22 @@ class _InfoTab extends StatelessWidget {
             '•  Distributions — every payout in the last 12 months, split into '
             'return of capital vs taxable income.\n'
             '•  Prices — the daily closes behind the calculation.',
+          ),
+          const Divider(height: 28),
+          Text('Bundled ROC data', style: section),
+          const SizedBox(height: 6),
+          Text(
+            'Return-of-capital history parsed from issuers’ Section 19a-1 '
+            'notices and built into the app:',
+            style: TextStyle(color: muted),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _RocStat(value: '$rocFunds', label: 'funds'),
+              _RocStat(value: '$rocPoints', label: 'distributions'),
+              _RocStat(value: kRocHistoryAsOf, label: 'last updated'),
+            ],
           ),
           const Divider(height: 28),
           Text('Disclaimers', style: section),
@@ -2592,6 +2614,39 @@ class _InfoTerm extends StatelessWidget {
           Text(
             desc,
             style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One compact figure in the Info-tab "Bundled ROC data" row.
+class _RocStat extends StatelessWidget {
+  final String value;
+  final String label;
+  const _RocStat({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),

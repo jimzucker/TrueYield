@@ -232,6 +232,8 @@ def write_history_dart(history, as_of, dest):
         "//",
         f"// As of: {as_of}",
         "",
+        f"const String kRocHistoryAsOf = '{as_of}';",
+        "",
         "/// Ticker -> {payable-date epoch (s) -> return-of-capital %}.",
         "const Map<String, Map<int, double>> kRocByTickerByEpoch = {",
     ]

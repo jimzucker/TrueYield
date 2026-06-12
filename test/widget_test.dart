@@ -48,15 +48,38 @@ void main() {
     expect(find.text('Calculate'), findsNWidgets(2));
   });
 
-  testWidgets('four tabs are present', (tester) async {
+  testWidgets('five tabs are present', (tester) async {
     await tester.pumpWidget(const TrueYieldApp());
     await tester.pump();
 
-    expect(find.byType(Tab), findsNWidgets(4));
+    expect(find.byType(Tab), findsNWidgets(5));
     expect(find.widgetWithText(Tab, 'Calculate'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Distributions'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Prices'), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Diagnostics'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Info'), findsOneWidget);
+  });
+
+  testWidgets('Diagnostics tab shows the holding-period scenarios', (
+    tester,
+  ) async {
+    // Tall surface so all scenario cards build (the list is lazy otherwise).
+    tester.view.physicalSize = const Size(1000, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const TrueYieldApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(Tab, 'Diagnostics'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No lots'), findsOneWidget);
+    expect(find.text('1 lot · 3 months'), findsOneWidget);
+    expect(find.text('1 lot · 30 months'), findsOneWidget);
+    expect(find.text('Multiple lots'), findsOneWidget);
+    expect(find.textContaining('Total return after tax'), findsWidgets);
   });
 
   testWidgets('Info tab explains how to use and read the app', (tester) async {
@@ -427,6 +450,37 @@ void main() {
       expect(find.text('Total'), findsOneWidget);
       expect(find.text('Value'), findsOneWidget);
       expect(find.textContaining('across 2 lots'), findsOneWidget);
+    });
+
+    testWidgets('a single lot uses the portfolio view, not the TTM one', (
+      tester,
+    ) async {
+      final client = MockClient(
+        (req) async => http.Response(
+          yahooChartJson(
+            price: 100,
+            months: [DateTime.utc(2025, 7), DateTime.utc(2026, 1)],
+            closes: [100, 100],
+            dividends: {
+              DateTime.utc(2025, 7, 15): 1.0,
+              DateTime.utc(2026, 1, 15): 1.0,
+            },
+          ),
+          200,
+        ),
+      );
+      await pumpScreen(tester, client);
+      await tester.tap(find.text('Add lot'));
+      await tester.pumpAndSettle();
+      await calculate(tester, ticker: 'ONE', federal: '32', state: '5');
+
+      // One real lot is still a portfolio: dollar header + per-lot grid, and
+      // none of the per-share TTM lines that misrepresented it before.
+      expect(find.text('Distributions received'), findsOneWidget);
+      expect(find.textContaining('across 1 lot'), findsOneWidget);
+      expect(find.text('Total'), findsOneWidget);
+      expect(find.text('TTM distributions'), findsNothing);
+      expect(find.text('Advertised yield'), findsNothing);
     });
 
     testWidgets('Distributions tab exposes an editable ROC % column', (

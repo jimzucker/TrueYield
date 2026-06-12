@@ -630,7 +630,7 @@ void main() {
         explicit.totalReturnAfterTax,
         closeTo(implicit.totalReturnAfterTax, _eps),
       );
-      expect(implicit.isSinglePortfolioLot, isTrue);
+      expect(implicit.isDefaultLot, isTrue);
     });
 
     test('two share lots with different buy dates aggregate by hand', () {
@@ -649,7 +649,7 @@ void main() {
           Lot(buyDate: _utc(2025, 8, 1), shares: 10),
         ],
       );
-      expect(r.isSinglePortfolioLot, isFalse);
+      expect(r.isDefaultLot, isFalse);
       expect(r.lots.length, 2);
       expect(r.totalCost, closeTo(2000, _eps));
       // Lot A: 10×1.0201 = 10.201; Lot B: 10×1.01 = 10.10 → 20.301 shares.
@@ -704,6 +704,11 @@ void main() {
       // Income = 100 sh × $2/sh = $200; costBasis = 1500 + 200 = 1700.
       expect(r.incomeAmount, closeTo(200, _eps));
       expect(r.costBasis, closeTo(1700, _eps));
+      // A single *explicit* lot is a portfolio, not the default-lot view, and
+      // the return is measured on the $1500 cost (not a per-share start price).
+      expect(r.isDefaultLot, isFalse);
+      expect(r.distributionsReceived, closeTo(200, _eps)); // 100 sh × $2/sh
+      expect(r.totalReturnBeforeTax, closeTo((r.nav - 1500) / 1500, _eps));
     });
 
     test('a lot bought after every distribution earns no income', () {
@@ -905,6 +910,123 @@ void main() {
       expect(yahooRangeFor(ago(3653), now), '10y');
       expect(yahooRangeFor(ago(3654), now), 'max');
     });
+  });
+
+  group('lots — holding periods (Diagnostics scenarios)', () {
+    final scenarios = buildDiagnostics(DateTime.utc(2026, 6, 12));
+    DiagnosticScenario byLabel(String l) =>
+        scenarios.firstWhere((s) => s.label == l);
+
+    test('covers no lots, <12M, >12M, >2Y, multiple, and a closed lot', () {
+      expect(scenarios.map((s) => s.label), [
+        'No lots',
+        '1 lot · 3 months',
+        '1 lot · 18 months',
+        '1 lot · 30 months',
+        'Multiple lots',
+        'Closed lot',
+      ]);
+      for (final s in scenarios) {
+        expect(s.result.qualifies, isTrue, reason: s.label);
+      }
+    });
+
+    test('no lots → the default (TTM) view', () {
+      expect(byLabel('No lots').result.isDefaultLot, isTrue);
+    });
+
+    test(
+      'every explicit-lot scenario is a portfolio that DRIP-grew shares',
+      () {
+        for (final label in [
+          '1 lot · 3 months',
+          '1 lot · 18 months',
+          '1 lot · 30 months',
+          'Multiple lots',
+          'Closed lot',
+        ]) {
+          final r = byLabel(label).result;
+          expect(r.isDefaultLot, isFalse, reason: label);
+          final initial = r.lots.fold<double>(0, (s, l) => s + l.initialShares);
+          expect(r.dripShares, greaterThan(initial), reason: label);
+        }
+      },
+    );
+
+    test('distributions received grow with the holding period', () {
+      final d3 = byLabel('1 lot · 3 months').result.distributionsReceived;
+      final d18 = byLabel('1 lot · 18 months').result.distributionsReceived;
+      final d30 = byLabel('1 lot · 30 months').result.distributionsReceived;
+      expect(d3, lessThan(d18));
+      expect(d18, lessThan(d30));
+    });
+
+    test('a multi-lot portfolio aggregates its component lots', () {
+      final multi = byLabel('Multiple lots').result;
+      expect(multi.lots.length, 3);
+      final parts =
+          byLabel('1 lot · 3 months').result.distributionsReceived +
+          byLabel('1 lot · 18 months').result.distributionsReceived +
+          byLabel('1 lot · 30 months').result.distributionsReceived;
+      expect(multi.distributionsReceived, closeTo(parts, 1e-6));
+    });
+
+    test('a closed lot books a realized gain and no unrealized gain', () {
+      final r = byLabel('Closed lot').result;
+      expect(r.lots.single.isClosed, isTrue);
+      expect(r.realizedGL, isNot(closeTo(0, 1e-6)));
+      expect(r.unrealizedGL, closeTo(0, _eps));
+    });
+
+    test(
+      'base case: a 1-share lot over the full ~1y window equals default TTM',
+      () {
+        // 13 monthly bars (≈1 year), price 10 → 11, $0.30 paid mid-month.
+        final bars = [
+          for (int m = 0; m < 13; m++)
+            PriceBar(date: _utc(2025, 6 + m), close: 10 + m * (1 / 12)),
+        ];
+        final dists = [
+          for (int m = 1; m < 13; m++)
+            DistributionEntry(date: _utc(2025, 6 + m, 15), amount: 0.30),
+        ];
+        YieldResult run(List<Lot>? lots) => YieldMath.compute(
+          ticker: 'BASE',
+          currentPrice: 11,
+          federalPct: 32,
+          statePct: 5,
+          localPct: 0,
+          distributions: dists,
+          priceBars: bars,
+          rocPct: 60,
+          lots: lots,
+        );
+        final dflt = run(null);
+        // One share bought at the start of the window (≈ a 1-year hold).
+        final oneLot = run([Lot(buyDate: _utc(2025, 6), shares: 1)]);
+        expect(dflt.isDefaultLot, isTrue);
+        expect(oneLot.isDefaultLot, isFalse); // it renders the portfolio view…
+        // …but the underlying economics are identical to the default TTM base.
+        expect(oneLot.nav, closeTo(dflt.nav, _eps));
+        expect(oneLot.totalCost, closeTo(dflt.totalCost, _eps));
+        expect(oneLot.costBasis, closeTo(dflt.costBasis, _eps));
+        expect(oneLot.incomeAmount, closeTo(dflt.incomeAmount, _eps));
+        expect(oneLot.taxThisYear, closeTo(dflt.taxThisYear, _eps));
+        expect(oneLot.dripShares, closeTo(dflt.dripShares, _eps));
+        expect(
+          oneLot.distributionsReceived,
+          closeTo(dflt.distributionsReceived, _eps),
+        );
+        expect(
+          oneLot.totalReturnBeforeTax,
+          closeTo(dflt.totalReturnBeforeTax, _eps),
+        );
+        expect(
+          oneLot.totalReturnAfterTax,
+          closeTo(dflt.totalReturnAfterTax, _eps),
+        );
+      },
+    );
   });
 }
 

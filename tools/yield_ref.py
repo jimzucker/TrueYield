@@ -56,6 +56,7 @@ def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
     sell_price = None if sell_ts is None else (price_at(sell_ts, sorted_bars) or current_price)
 
     factor = 1.0
+    dist_per_share = 0.0
     income_per_share = 0.0
     for ts, amt, roc in asc:
         if ts < lot["buyTs"]:
@@ -64,6 +65,7 @@ def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
             continue
         p = price_at(ts, sorted_bars) or current_price
         factor *= 1 + amt / p
+        dist_per_share += amt
         income_per_share += amt * (1 - _roc_frac(roc if roc is not None else default_roc))
 
     final_shares = s * factor
@@ -78,6 +80,7 @@ def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
         "sellPrice": sell_price,
         "finalShares": final_shares,
         "cost": cost,
+        "distributions": s * dist_per_share,
         "incomeAmount": income,
         "taxThisYear": income * combined,
         "nav": nav,
@@ -120,6 +123,7 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
             break
 
     # No explicit lots → one default lot (epoch 0, 1 share) → original per-share math.
+    is_default_lot = not lots
     eff_lots = lots if lots else [{"buyTs": 0, "shares": 1}]
     lot_results = [
         _compute_lot(l, asc, sorted_bars, current_price, combined, roc_pct)
@@ -129,6 +133,7 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
     total_cost = sum(l["cost"] for l in lot_results)
     total_initial = sum(l["initialShares"] for l in lot_results)
     total_final = sum(l["finalShares"] for l in lot_results)
+    distributions_received = sum(l["distributions"] for l in lot_results)
     income_amount = sum(l["incomeAmount"] for l in lot_results)
     tax_this_year = sum(l["taxThisYear"] for l in lot_results)
     nav = sum(l["nav"] for l in lot_results)
@@ -167,6 +172,8 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
         "totalReturnAfterTax": total_return_after_tax,
         "totalCost": total_cost,
         "perShareIncome": per_share_income,
+        "distributionsReceived": distributions_received,
+        "isDefaultLot": is_default_lot,
         "lots": lot_results,
     }
 

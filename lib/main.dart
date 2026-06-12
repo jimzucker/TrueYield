@@ -171,6 +171,7 @@ class LotResult {
   final double buyPrice; // price resolved on buyDate
   final double finalShares; // S × Π(1 + d/P) over this lot's distributions
   final double cost; // S × buyPrice (dollars invested)
+  final double distributions; // gross $ paid while held = S × Σ d (reinvested)
   final double incomeAmount; // taxable income (S × Σ d·(1−roc))
   final double taxThisYear; // incomeAmount × combined rate
   // Position value now: open lots = finalShares × currentPrice; closed lots =
@@ -190,6 +191,7 @@ class LotResult {
     required this.buyPrice,
     required this.finalShares,
     required this.cost,
+    required this.distributions,
     required this.incomeAmount,
     required this.taxThisYear,
     required this.nav,
@@ -251,10 +253,14 @@ class YieldResult {
   // independent of lots. Powers the per-share yield lines and the
   // Distributions-tab ROC split, which stay per-share concepts.
   final double perShareIncome;
+  // Gross distributions actually received (and DRIP-reinvested) across all
+  // lots, in dollars = Σ lot.distributions.
+  final double distributionsReceived;
 
-  // True when the result is a single (default) lot — the UI then shows the
-  // original per-share statement + reference grid; otherwise a portfolio view.
-  bool get isSinglePortfolioLot => lots.length == 1;
+  // True when no explicit lots were entered — the result is the original
+  // "1 share a year ago" hypothetical, so the UI shows the per-share TTM
+  // statement + reference grid. With real lots it shows a by-lot portfolio view.
+  final bool isDefaultLot;
 
   final List<DistributionEntry> distributions;
   final List<PriceBar> priceBars;
@@ -283,6 +289,8 @@ class YieldResult {
     required this.lots,
     required this.totalCost,
     required this.perShareIncome,
+    required this.distributionsReceived,
+    required this.isDefaultLot,
     required this.distributions,
     required this.priceBars,
     required this.qualifies,
@@ -317,6 +325,8 @@ class YieldResult {
       lots: const [],
       totalCost: currentPrice,
       perShareIncome: 0,
+      distributionsReceived: 0,
+      isDefaultLot: true,
       distributions: const [],
       priceBars: priceBars,
       qualifies: false,
@@ -382,7 +392,8 @@ class YieldMath {
     // No explicit lots → one default lot. Its buy date precedes every bar and
     // distribution (epoch 0), so priceAt resolves to startPrice and all
     // distributions count: the lot's economics equal the original 1-share path.
-    final effectiveLots = (lots == null || lots.isEmpty)
+    final isDefaultLot = lots == null || lots.isEmpty;
+    final effectiveLots = isDefaultLot
         ? [
             Lot(
               buyDate: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
@@ -402,6 +413,7 @@ class YieldMath {
     double totalCost = 0,
         totalInitialShares = 0,
         totalFinalShares = 0,
+        distributionsReceived = 0,
         incomeAmount = 0,
         taxThisYear = 0,
         nav = 0,
@@ -412,6 +424,7 @@ class YieldMath {
       totalCost += l.cost;
       totalInitialShares += l.initialShares;
       totalFinalShares += l.finalShares;
+      distributionsReceived += l.distributions;
       incomeAmount += l.incomeAmount;
       taxThisYear += l.taxThisYear;
       nav += l.nav;
@@ -463,6 +476,8 @@ class YieldMath {
       lots: lotResults,
       totalCost: totalCost,
       perShareIncome: perShareIncome,
+      distributionsReceived: distributionsReceived,
+      isDefaultLot: isDefaultLot,
       distributions: descDist,
       priceBars: sortedCloses,
       qualifies: true,
@@ -499,12 +514,14 @@ class YieldMath {
         : (priceAt(sellDate, sortedCloses) ?? currentPrice);
 
     double factor = 1;
+    double distPerShare = 0;
     double incomePerShare = 0;
     for (final d in ascDist) {
       if (d.date.isBefore(lot.buyDate)) continue;
       if (sellDate != null && d.date.isAfter(sellDate)) continue;
       final priceAtDiv = priceAt(d.date, sortedCloses) ?? currentPrice;
       factor *= 1 + d.amount / priceAtDiv;
+      distPerShare += d.amount;
       incomePerShare += d.amount * (1 - _rocFrac(d.rocPct ?? defaultRoc));
     }
 
@@ -520,6 +537,7 @@ class YieldMath {
       buyPrice: buyPrice,
       finalShares: finalShares,
       cost: cost,
+      distributions: s * distPerShare,
       incomeAmount: incomeAmount,
       taxThisYear: incomeAmount * combined,
       nav: nav,
@@ -668,6 +686,89 @@ String yahooRangeFor(DateTime earliestBuy, DateTime now) {
   if (days <= 1827) return '5y';
   if (days <= 3653) return '10y';
   return 'max';
+}
+
+/// One self-test scenario for the Diagnostics tab: a labeled [YieldResult]
+/// computed from synthetic data, used to sanity-check the lot math.
+class DiagnosticScenario {
+  final String label;
+  final String detail;
+  final YieldResult result;
+  const DiagnosticScenario(this.label, this.detail, this.result);
+}
+
+/// Deterministic self-test scenarios computed from synthetic data anchored to
+/// [now] (no network): a rising $10→$13 price over ~3 years with a fixed $0.25
+/// monthly distribution. Covers the holding-period cases — no lots, a lot held
+/// under a year, over a year, over two years, several lots, and a closed lot —
+/// so the Diagnostics tab and the tests share exactly one source of truth. Pure
+/// (takes [now]).
+List<DiagnosticScenario> buildDiagnostics(DateTime now) {
+  final today = DateTime.utc(now.year, now.month, now.day);
+  const months = 37; // ~3 years of monthly bars
+  final bars = <PriceBar>[
+    for (int i = months - 1; i >= 0; i--)
+      PriceBar(
+        date: DateTime.utc(today.year, today.month - i, 1),
+        close: double.parse(
+          (10.0 + (months - 1 - i) * (3.0 / (months - 1))).toStringAsFixed(2),
+        ),
+      ),
+  ];
+  final dists = <DistributionEntry>[
+    for (int i = months - 1; i >= 1; i--)
+      DistributionEntry(
+        date: DateTime.utc(today.year, today.month - i, 15),
+        amount: 0.25,
+      ),
+  ];
+  final price = bars.last.close!;
+  DateTime ago(int m) => DateTime.utc(today.year, today.month - m, today.day);
+
+  YieldResult run(List<Lot>? lots) => YieldMath.compute(
+    ticker: 'DIAG',
+    currentPrice: price,
+    federalPct: 32,
+    statePct: 5,
+    localPct: 0,
+    distributions: dists,
+    priceBars: bars,
+    rocPct: 50,
+    lots: lots,
+  );
+
+  return [
+    DiagnosticScenario('No lots', '1 share, ~1y default (TTM view)', run(null)),
+    DiagnosticScenario(
+      '1 lot · 3 months',
+      'held under 12 months · 100 sh',
+      run([Lot(buyDate: ago(3), shares: 100)]),
+    ),
+    DiagnosticScenario(
+      '1 lot · 18 months',
+      'held over 12 months · 100 sh',
+      run([Lot(buyDate: ago(18), shares: 100)]),
+    ),
+    DiagnosticScenario(
+      '1 lot · 30 months',
+      'held over 2 years · 100 sh',
+      run([Lot(buyDate: ago(30), shares: 100)]),
+    ),
+    DiagnosticScenario(
+      'Multiple lots',
+      '3 lots bought 3 / 18 / 30 months ago',
+      run([
+        Lot(buyDate: ago(3), shares: 100),
+        Lot(buyDate: ago(18), shares: 100),
+        Lot(buyDate: ago(30), shares: 100),
+      ]),
+    ),
+    DiagnosticScenario(
+      'Closed lot',
+      'bought 18 mo ago, sold 6 mo ago',
+      run([Lot(buyDate: ago(18), shares: 100, sellDate: ago(6))]),
+    ),
+  ];
 }
 
 class YieldScreen extends StatefulWidget {
@@ -1070,7 +1171,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('TrueYield'),
@@ -1081,6 +1182,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
               Tab(text: 'Calculate'),
               Tab(text: 'Distributions'),
               Tab(text: 'Prices'),
+              Tab(text: 'Diagnostics'),
               Tab(text: 'Info'),
             ],
           ),
@@ -1096,6 +1198,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                 onRocChanged: _setRocOverride,
               ),
               _PricesTab(result: _result),
+              const _DiagnosticsTab(),
               const _InfoTab(),
             ],
           ),
@@ -1597,6 +1700,143 @@ class _LotRowState extends State<_LotRow> {
   }
 }
 
+// Diagnostics tab: runs the lot math on deterministic synthetic data across a
+// range of holding periods so anyone can sanity-check it without a network call.
+class _DiagnosticsTab extends StatelessWidget {
+  const _DiagnosticsTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scenarios = buildDiagnostics(DateTime.now());
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+      children: [
+        Text('Diagnostics', style: theme.textTheme.headlineSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Self-test scenarios on synthetic data — a price rising \$10 → \$13 '
+          'over ~3 years, a \$0.25 monthly distribution, tax 37%, ROC 50%. They '
+          'sanity-check the lot math across holding periods (no network).',
+          style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        for (final s in scenarios) _DiagnosticCard(scenario: s),
+      ],
+    );
+  }
+}
+
+class _DiagnosticCard extends StatelessWidget {
+  final DiagnosticScenario scenario;
+  const _DiagnosticCard({required this.scenario});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final r = scenario.result;
+    final initial = r.lots.fold<double>(0, (s, l) => s + l.initialShares);
+    final tag = r.isDefaultLot
+        ? 'Default'
+        : '${r.lots.length} lot${r.lots.length == 1 ? '' : 's'}';
+
+    Widget row(String k, String v, {Color? c}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            k,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Text(
+            v,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: c,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    scenario.label,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    tag,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              scenario.detail,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const Divider(height: 18),
+            row(
+              'Total return after tax',
+              _signedPct(r.totalReturnAfterTax),
+              c: _signColor(r.totalReturnAfterTax),
+            ),
+            row('Cost → value', '${_money(r.totalCost)} → ${_money(r.nav)}'),
+            row(
+              'Shares',
+              '${initial.toStringAsFixed(2)} → ${r.dripShares.toStringAsFixed(2)}',
+            ),
+            row('Distributions received', _money(r.distributionsReceived)),
+            row('Income (taxable)', _signedMoney(r.incomeAmount), c: _gain),
+            if (r.realizedGL != 0)
+              row(
+                'Realized G/L',
+                _signedMoney(r.realizedGL),
+                c: _signColor(r.realizedGL),
+              ),
+            row(
+              'Unrealized G/L',
+              _signedMoney(r.unrealizedGL),
+              c: _signColor(r.unrealizedGL),
+            ),
+            row('Tax this year', _signedMoney(-r.taxThisYear), c: _loss),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // Info tab: a short user guide — what the app tells you, how to use it, and how
 // to read each result line — plus disclaimers and About/links.
 class _InfoTab extends StatelessWidget {
@@ -1866,11 +2106,14 @@ class _ResultCard extends StatelessWidget {
     }
 
     final afterTaxValue = r.nav - r.taxThisYear;
-    final single = r.isSinglePortfolioLot;
+    // No lots entered → the original "1 share a year ago" per-share/TTM view.
+    // With real lots → a by-lot, dollar-denominated portfolio view.
+    final defaultView = r.isDefaultLot;
     final totalInitialShares = r.lots.fold<double>(
       0,
       (s, l) => s + l.initialShares,
     );
+    final lotCount = r.lots.length;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -1887,22 +2130,25 @@ class _ResultCard extends StatelessWidget {
               ),
               const SizedBox(height: 10),
             ],
-            // The entered ticker is highlighted in the input field above and the
-            // current price shows in the yield lines + reference grid, so the
-            // header is just the headline TTM distributions figure.
+            // Header: per-share TTM total for the default hypothetical; the
+            // actual dollars received (and reinvested) for a real portfolio.
             _StmtRow(
-              label: 'TTM distributions',
+              label: defaultView
+                  ? 'TTM distributions'
+                  : 'Distributions received',
               sub: 'reinvested via DRIP',
-              value: _money(r.sumDistributions),
+              value: _money(
+                defaultView ? r.sumDistributions : r.distributionsReceived,
+              ),
               headline: true,
             ),
             const Divider(height: 28),
 
             // ─── BLUF: total return after tax, with the three components that
-            //     sum to it nested beneath (income + unrealized G/L − tax).
+            //     sum to it nested beneath (income + G/L − tax).
             _StmtRow(
               label: 'Total return after tax',
-              sub: single
+              sub: defaultView
                   ? '${_money(r.startPrice)} → ${_money(afterTaxValue)} on your start'
                   : '${_money(r.totalCost)} → ${_money(afterTaxValue)} on your cost',
               value: _signedPct(r.totalReturnAfterTax),
@@ -1911,17 +2157,17 @@ class _ResultCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             // DRIP benefit memo — not a summed component (it's already baked
-            // into Income + Unrealized G/L), so it shows share growth, not $.
+            // into Income + G/L), so it shows share growth, not $.
             Padding(
               padding: const EdgeInsets.only(left: 16),
               child: Text(
-                single
+                defaultView
                     ? 'DRIP grew your shares 1.00 → '
                           '${r.dripShares.toStringAsFixed(2)} '
                           '(+${(r.compoundedGrossYield * 100).toStringAsFixed(0)}%)'
                     : 'DRIP grew your shares ${totalInitialShares.toStringAsFixed(2)} → '
                           '${r.dripShares.toStringAsFixed(2)} '
-                          'across ${r.lots.length} lots '
+                          'across $lotCount ${lotCount == 1 ? 'lot' : 'lots'} '
                           '(+${(r.compoundedGrossYield * 100).toStringAsFixed(0)}%)',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.primary,
@@ -1932,10 +2178,10 @@ class _ResultCard extends StatelessWidget {
             const SizedBox(height: 8),
             _StmtRow(
               label: 'Income (taxable)',
-              sub: single
+              sub: defaultView
                   ? '${_money(r.sumDistributions)} × '
                         '${(100 - r.rocPct).toStringAsFixed(0)}% (1−ROC)'
-                  : 'taxable portion of distributions',
+                  : 'taxable part of ${_money(r.distributionsReceived)} received',
               value: _signedMoney(r.incomeAmount),
               valueColor: _gain,
               nested: true,
@@ -1969,24 +2215,27 @@ class _ResultCard extends StatelessWidget {
             ),
             const Divider(height: 28),
 
-            // ─── The two yields (denominator = current price), kept separate
-            //     from the cost-based total return above.
-            _StmtRow(
-              label: 'Advertised yield',
-              sub: '${_money(r.sumDistributions)} ÷ ${_money(r.currentPrice)}',
-              value: _pctPlain(r.grossYield),
-            ),
-            const SizedBox(height: 8),
-            _StmtRow(
-              label: 'After-tax yield',
-              sub:
-                  'kept ${_money(r.sumDistributions - r.perShareIncome * r.combinedRate)} ÷ '
-                  '${_money(r.currentPrice)}',
-              value: _pctPlain(r.afterTaxYieldRoc),
-            ),
-            const Divider(height: 28),
+            // The per-share yields (denominator = current price) are a
+            // single-share TTM concept — only meaningful for the default view.
+            if (defaultView) ...[
+              _StmtRow(
+                label: 'Advertised yield',
+                sub:
+                    '${_money(r.sumDistributions)} ÷ ${_money(r.currentPrice)}',
+                value: _pctPlain(r.grossYield),
+              ),
+              const SizedBox(height: 8),
+              _StmtRow(
+                label: 'After-tax yield',
+                sub:
+                    'kept ${_money(r.sumDistributions - r.perShareIncome * r.combinedRate)} ÷ '
+                    '${_money(r.currentPrice)}',
+                value: _pctPlain(r.afterTaxYieldRoc),
+              ),
+              const Divider(height: 28),
+            ],
 
-            if (single)
+            if (defaultView)
               _ReferenceGrid(result: r)
             else
               _PortfolioGrid(result: r),

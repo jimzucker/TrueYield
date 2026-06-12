@@ -580,6 +580,39 @@ void main() {
       expect(find.textContaining('positive quantity'), findsOneWidget);
     });
 
+    testWidgets('a new lot defaults its Price to the last close', (
+      tester,
+    ) async {
+      final client = MockClient(
+        (req) async => http.Response(
+          yahooChartJson(
+            price: 90,
+            months: [
+              DateTime.utc(2025, 6),
+              DateTime.utc(2025, 12),
+              DateTime.utc(2026, 6),
+            ],
+            closes: [100, 95, 90], // last close = 90
+            dividends: {DateTime.utc(2025, 12, 15): 5.0},
+          ),
+          200,
+        ),
+      );
+      await pumpScreen(tester, client);
+      // Enter a ticker and blur → background prefetch loads the price bars.
+      await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'PRC');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      // A new lot pre-fills its Price with the last close (90).
+      await tester.tap(find.text('Add lot'));
+      await tester.pumpAndSettle();
+      final price = tester.widget<TextField>(
+        find.widgetWithText(TextField, 'Price'),
+      );
+      expect(price.controller!.text, '90');
+    });
+
     testWidgets('Distributions tab exposes an editable ROC % column', (
       tester,
     ) async {

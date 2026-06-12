@@ -980,7 +980,10 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     // When the ticker field loses focus, load that ticker's saved lots (or
     // clear to the default), keeping each fund's positions separate.
     _tickerFocus.addListener(() {
-      if (!_tickerFocus.hasFocus) _syncLotsForTicker();
+      if (!_tickerFocus.hasFocus) {
+        _syncLotsForTicker();
+        _prefetchForLots();
+      }
     });
   }
 
@@ -1172,6 +1175,42 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     if (_lastBars.isEmpty) return null;
     if (_lastBarsTicker != _tickerCtrl.text.trim().toUpperCase()) return null;
     return YieldMath.priceAt(date, _lastBars);
+  }
+
+  // The most recent close DAY (last bar's date) when we have data for the
+  // current ticker, else the last weekday. Used as a new lot's default buy date.
+  DateTime _lastCloseDay() {
+    final t = _tickerCtrl.text.trim().toUpperCase();
+    if (_lastBars.isNotEmpty && _lastBarsTicker == t) {
+      final d = _lastBars.last.date;
+      return DateTime.utc(d.year, d.month, d.day);
+    }
+    return lastTradingDay(DateTime.now());
+  }
+
+  // Background fetch when a ticker is committed, so new/edited lots can default
+  // their price to the last close even before the user taps Calculate. Silent:
+  // it only populates the price bars; it never shows a result or an error.
+  Future<void> _prefetchForLots() async {
+    final ticker = _tickerCtrl.text.trim().toUpperCase();
+    if (ticker.isEmpty) return;
+    if (_lastBarsTicker == ticker && _lastBars.isNotEmpty) return;
+    try {
+      final result = await _fetchYield(
+        ticker: ticker,
+        federalPct: 0,
+        statePct: 0,
+        localPct: 0,
+        rocPct: 0,
+      );
+      if (!mounted || result.priceBars.isEmpty) return;
+      setState(() {
+        _lastBars = result.priceBars;
+        _lastBarsTicker = ticker;
+      });
+    } catch (_) {
+      // Background prefetch — ignore failures (bad ticker, offline, etc.).
+    }
   }
 
   // Yahoo dividend epoch (seconds) — the stable key for a ROC override.
@@ -1632,9 +1671,9 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                 ),
                 TextButton.icon(
                   onPressed: () => _mutateLots(() {
-                    // Default: 100 shares bought on the last trading day; price
-                    // defaults to that day's close when we have prices.
-                    final buyDate = lastTradingDay(DateTime.now());
+                    // Default: 100 shares bought on the last close day, priced at
+                    // that day's close (when we have prices for the ticker).
+                    final buyDate = _lastCloseDay();
                     _lots.add(
                       Lot(
                         buyDate: buyDate,
@@ -1666,6 +1705,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                   key: ValueKey(i),
                   lot: _lots[i],
                   closeOn: _closeOn,
+                  defaultPrice: _closeOn(_lots[i].buyDate),
                   onChanged: (l) => _mutateLots(() => _lots[i] = l),
                   onRemove: () => _mutateLots(() => _lots.removeAt(i)),
                 ),
@@ -1683,12 +1723,16 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
 class _LotRow extends StatefulWidget {
   final Lot lot;
   final double? Function(DateTime) closeOn;
+  // The close on the lot's buy date (when known), used to pre-fill the Price
+  // field for a lot whose price hasn't been set yet.
+  final double? defaultPrice;
   final ValueChanged<Lot> onChanged;
   final VoidCallback onRemove;
   const _LotRow({
     super.key,
     required this.lot,
     required this.closeOn,
+    required this.defaultPrice,
     required this.onChanged,
     required this.onRemove,
   });
@@ -1703,18 +1747,26 @@ class _LotRowState extends State<_LotRow> {
   late final FocusNode _qtyFocus;
   late final FocusNode _priceFocus;
 
+  // The price to show in the field: the entered price, else the buy-date close.
+  String get _priceFieldText => widget.lot.price != null
+      ? fmtNum(widget.lot.price)
+      : (widget.defaultPrice != null
+            ? fmtMoneyField(widget.defaultPrice!)
+            : '');
+
   @override
   void initState() {
     super.initState();
     _qtyCtrl = TextEditingController(text: fmtNum(widget.lot.shares));
-    _priceCtrl = TextEditingController(text: fmtNum(widget.lot.price));
+    _priceCtrl = TextEditingController(text: _priceFieldText);
     _qtyFocus = FocusNode();
     _priceFocus = FocusNode();
   }
 
   // Rows are keyed by index, so removing a middle lot reuses this State for a
   // different lot. When that happens (and we're not mid-edit), resync the field
-  // — but never disturb the user's active typing.
+  // — but never disturb the user's active typing. The Price field also refills
+  // when the buy-date close arrives from a background fetch (defaultPrice).
   @override
   void didUpdateWidget(_LotRow old) {
     super.didUpdateWidget(old);
@@ -1722,8 +1774,10 @@ class _LotRowState extends State<_LotRow> {
       final t = fmtNum(widget.lot.shares);
       if (_qtyCtrl.text != t) _qtyCtrl.text = t;
     }
-    if (!_priceFocus.hasFocus && widget.lot.price != old.lot.price) {
-      final t = fmtNum(widget.lot.price);
+    if (!_priceFocus.hasFocus &&
+        (widget.lot.price != old.lot.price ||
+            widget.defaultPrice != old.defaultPrice)) {
+      final t = _priceFieldText;
       if (_priceCtrl.text != t) _priceCtrl.text = t;
     }
   }
@@ -1848,7 +1902,7 @@ class _LotRowState extends State<_LotRow> {
     final theme = Theme.of(context);
     // Effective price (entered, else the buy-date close if we have it) → the
     // computed principal that recalcs live as qty / price change.
-    final effPrice = lot.price ?? widget.closeOn(lot.buyDate);
+    final effPrice = lot.price ?? widget.defaultPrice;
     final principal = (lot.shares != null && effPrice != null)
         ? lot.shares! * effPrice
         : null;

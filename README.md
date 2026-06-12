@@ -42,13 +42,14 @@ TrueYield simulates a full year of **broker DRIP** reinvestment, taxes only the 
 ## How to use it
 
 1. **Enter a ticker** (e.g. `YMAG`, `SCHD`, `JEPI`).
-2. **Enter your marginal tax rates** — federal, state, and local, as whole percentages (local defaults to `0`).
-3. **Enter the Return of capital %** — the share of distributions classified as return of capital, which isn't taxed this year (it lowers your cost basis instead). Defaults to `71`, a typical figure for option-income ETFs.
-4. **Tap Calculate.**
+2. **Return of capital %** — auto-fills for the tracked funds (see [Bundled ROC data](#bundled-roc-data)); edit it if you disagree, or set it by hand for funds we don't track.
+3. **Enter your marginal tax rates** — federal, state, and local, as whole percentages (local defaults to `0`).
+4. *(Optional)* **Add lots** on the form — real buy dates with a share count and/or cost. Give a lot a sell date and it books a realized gain; leave it blank to hold to today. No lots means "one share bought a year ago."
+5. **Tap Calculate.**
 
-The result card leads with **Total return after tax** — your income plus the change in share price, net of this year's tax, measured against what one share cost a year ago. Directly beneath it are the three components that sum to it: **income (taxable)**, **unrealized gain/loss**, and **tax this year**. Then two yields on today's price: the **Advertised yield** (the headline) and the **After-tax yield**. A reference grid shows the position economics underneath (shares after DRIP, present value, and cost basis).
+The result card leads with **Total return after tax** — your income plus the change in share price, net of this year's tax, measured against what one share cost a year ago. Directly beneath it are the components that sum to it: **income (taxable)**, **realized / unrealized gain/loss**, and **tax this year**. Then two yields on today's price: the **Advertised yield** (the headline) and the **After-tax yield**. A "show your work" grid shows the position economics underneath — a reference grid for the default share, or a per-lot portfolio table when you've entered lots.
 
-Switch to the **Distributions** and **Prices** tabs to see the exact payouts and the daily closes the calculation is built on. Your inputs are saved locally, so they're already filled in next time you open the app.
+The app has six tabs: **Calculate**, **Lots** (full per-lot detail), **Distributions** (every payout split into return-of-capital vs taxable, with an editable per-row ROC %), **Prices** (the daily closes behind the math), **Info** (this guide + the tracked-fund list + CSV downloads), and **Diagnostics** (self-test scenarios). Your inputs and lots are saved locally per ticker, so they're already filled in next time.
 
 If a ticker paid no distributions in the last 12 months, it's flagged **"Does not qualify"** and the card shows just the current price.
 
@@ -64,9 +65,15 @@ TrueYield models one share bought ~12 months ago at `start_price`, with every di
 
 …where `NAV = shares_after_DRIP × current_price` and `tax = combined_rate × taxable income`. The card also surfaces the **cost basis** (`start_price + reinvested income`) and the resulting **unrealized gain/loss** (`NAV − cost basis`), which is taxed as capital gains only when you sell.
 
+## Bundled ROC data
+
+Return of capital isn't in the Yahoo feed — the only authoritative source is each issuer's **Section 19a-1 notices** (per-distribution estimates) and year-end **Form 8937 / 1099** (actuals). TrueYield bundles a return-of-capital history for **40+ tracked funds** (YieldMax, NEOS, Global X, ProShares, iShares, REX, Roundhill, Amplify, First Trust, Invesco, and more), scraped from those documents by the tools in [`tools/`](./tools) and compiled into the app. When you enter a tracked ticker, each distribution's ROC % auto-fills with the right value — and for a **completed calendar year** it uses the settled annual figure (YieldMax Form 8937 actuals, or the year's aggregate) rather than the weekly estimates. You can always override any row.
+
+A [GitHub Action](./.github/workflows/refresh-roc.yml) refreshes the prices, ROC notices, and 8937 actuals every weekday and commits any changes, so the data stays current without manual work. The full history is downloadable as CSV from the foot of the Distributions and Prices tabs (and the Info tab lists every tracked fund). ROC figures are estimates/issuer characterizations, not tax advice — see your 1099.
+
 ## Data and privacy
 
-TrueYield runs entirely on your device. There is no account, no API key, and no backend server. When you tap Calculate, it makes a single HTTPS request to Yahoo Finance's public chart endpoint to fetch the trailing 12 months of **daily** prices and distributions for your ticker — nothing else leaves your device, and nothing is logged or transmitted anywhere else.
+TrueYield runs entirely on your device. There is no account, no API key, and no backend server. When you tap Calculate, it makes a single HTTPS request to Yahoo Finance's public chart endpoint to fetch the **daily** prices and distributions for your ticker — nothing else leaves your device, and nothing is logged or transmitted anywhere else. The return-of-capital history is compiled into the app, so it needs no network call. The CSV-download and project links open files hosted on GitHub only when you tap them.
 
 See [PRIVACY.md](./PRIVACY.md) for the full policy.
 
@@ -105,7 +112,7 @@ flutter test
   git config core.hooksPath .githooks
   ```
 
-The test suite covers the broker-DRIP / return-of-capital math (flat-price baseline, the ROC income split, price-drop and price-rise total return, distribution ordering, and daily-bar YMAG/TQQQ fixtures verified against the Python reference in [`tools/yield_ref.py`](./tools/yield_ref.py)), the Yahoo response parser and each of its error branches, the no-distribution and null-price edge cases, the web-only CORS-proxy routing (native targets always call Yahoo directly), and the app's tab rendering, input validation (including the return-of-capital range), and saved-input restoration.
+The Dart test suite covers the broker-DRIP / return-of-capital math (flat-price baseline, the ROC income split, lot aggregation and realized gains, price-drop and price-rise total return, and daily-bar fixtures verified against the Python reference in [`tools/yield_ref.py`](./tools/yield_ref.py)), the Yahoo response parser and its ROC-precedence rules (user override > completed-year actual > per-distribution history > default), the Diagnostics self-test scenarios, and the app's six-tab rendering, input validation, and saved-input restoration. CI additionally runs [`tools/test_parsers.py`](./tools/test_parsers.py) — fixture tests for the format-fragile scraper/parser internals (notice and Form 8937 parsing, the year aggregates).
 
 See [SESSION_LOG.md](./SESSION_LOG.md) for the project's iteration history.
 

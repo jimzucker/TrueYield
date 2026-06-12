@@ -24,8 +24,22 @@ This product uses the following third-party components:
   - shared_preferences (Dart package) — © Flutter authors, BSD 3-Clause
     License.
 
+  - url_launcher (Dart package) — © Flutter authors, BSD 3-Clause License.
+
+Build/refresh tooling (under tools/, used to generate the bundled datasets and
+in CI — NOT shipped in the application binary):
+
+  - pypdf — © pypdf authors, BSD 3-Clause License.
+  - pdfplumber — © Jeremy Singer-Vine, MIT License (uses pdfminer.six, MIT).
+
 Data:
 
-  - Quote and dividend data are fetched at runtime from Yahoo Finance's
-    public unofficial chart endpoint. TrueYield does not redistribute that
-    data; it queries and displays it per-user, per-request.
+  - Live quote and dividend data are fetched at runtime from Yahoo Finance's
+    public unofficial chart endpoint, per-user and per-request; that live
+    data is not redistributed.
+
+  - The app bundles (and exports as CSV) a derived dataset: a daily price
+    history from Yahoo and a return-of-capital history computed from issuers'
+    public Section 19a-1 notices and Form 8937 filings. These figures are
+    compiled by the project's tools (see tools/), provided as-is for analysis,
+    and are not tax advice.

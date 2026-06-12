@@ -410,14 +410,45 @@ void main() {
       );
     });
 
-    testWidgets('an HTTP error surfaces a "Lookup failed" message', (
+    testWidgets('an HTTP error surfaces a server-error message', (
       tester,
     ) async {
       final client = MockClient((req) async => http.Response('', 500));
       await pumpScreen(tester, client);
       await calculate(tester, ticker: 'ERR');
 
-      expect(find.textContaining('Lookup failed: HTTP 500'), findsOneWidget);
+      expect(find.textContaining('Yahoo returned an error'), findsOneWidget);
+      expect(find.textContaining('HTTP 500'), findsOneWidget);
+    });
+
+    testWidgets('an unknown symbol surfaces a "not found" message', (
+      tester,
+    ) async {
+      // Yahoo's own error envelope for a bad symbol.
+      final client = MockClient(
+        (req) async => http.Response(
+          '{"chart":{"result":null,"error":{"code":"Not Found",'
+          '"description":"No data found, symbol may be delisted"}}}',
+          200,
+        ),
+      );
+      await pumpScreen(tester, client);
+      await calculate(tester, ticker: 'NOPE');
+
+      expect(find.textContaining('not found'), findsOneWidget);
+      expect(find.textContaining('NOPE'), findsWidgets);
+    });
+
+    testWidgets('a network failure surfaces a connection message', (
+      tester,
+    ) async {
+      final client = MockClient(
+        (req) async => throw http.ClientException('Failed host lookup'),
+      );
+      await pumpScreen(tester, client);
+      await calculate(tester, ticker: 'NET');
+
+      expect(find.textContaining('check your connection'), findsOneWidget);
     });
 
     testWidgets('entering a known ticker auto-fills its ROC from 19a-1', (

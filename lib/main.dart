@@ -1011,6 +1011,38 @@ List<DiagnosticScenario> buildDiagnostics(DateTime now) {
   ];
 }
 
+/// Turn a fetch/parse failure into a short, specific message. The pieces it
+/// disambiguates: a network failure (`http.ClientException` or a socket error),
+/// an HTTP status (the fetch layer throws `'HTTP <code>'`), an unknown symbol or
+/// missing price (`parseYahooChart` throws Yahoo's own human-readable text), and
+/// anything else (passed through). Pure + testable.
+String friendlyFetchError(Object e, String ticker) {
+  if (e is http.ClientException) {
+    return 'Couldn’t reach Yahoo — check your connection.';
+  }
+  final s = e.toString();
+  final low = s.toLowerCase();
+  if (low.contains('failed host lookup') ||
+      low.contains('socketexception') ||
+      low.contains('connection') ||
+      low.contains('timed out')) {
+    return 'Couldn’t reach Yahoo — check your connection.';
+  }
+  if (s.startsWith('HTTP')) {
+    return 'Yahoo returned an error ($s). Try again in a moment.';
+  }
+  if (low.contains('missing current price')) {
+    return 'No current price for “$ticker” right now — try again later.';
+  }
+  if (low.contains('no data') ||
+      low.contains('not found') ||
+      low.contains('delisted') ||
+      low.contains('may be delisted')) {
+    return '“$ticker” not found — check the symbol.';
+  }
+  return 'Lookup failed: $e';
+}
+
 class YieldScreen extends StatefulWidget {
   /// Optional HTTP client seam. Production leaves this null and a one-shot
   /// client is created per request; tests inject a mock to drive the
@@ -1529,7 +1561,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       });
     } catch (e) {
       setState(() {
-        _error = 'Lookup failed: $e';
+        _error = friendlyFetchError(e, ticker);
         _loading = false;
       });
     }

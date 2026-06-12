@@ -686,22 +686,43 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _rateField(_federalCtrl, 'Federal %', fieldDecoration),
-              const SizedBox(width: 10),
-              _rateField(_stateCtrl, 'State %', fieldDecoration),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _rateField(_localCtrl, 'Local %', fieldDecoration),
-              const SizedBox(width: 10),
-              _rateField(_ltGainsCtrl, 'LT gains %', fieldDecoration),
-            ],
+          // All four on one row when there's room (wide/web), else a 2×2 grid so
+          // the labels don't clip on a phone.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final fed = _rateField(
+                _federalCtrl,
+                'Federal %',
+                fieldDecoration,
+              );
+              final st = _rateField(_stateCtrl, 'State %', fieldDecoration);
+              final loc = _rateField(_localCtrl, 'Local %', fieldDecoration);
+              final lt = _rateField(
+                _ltGainsCtrl,
+                'LT gains %',
+                fieldDecoration,
+              );
+              const gap = SizedBox(width: 10);
+              if (constraints.maxWidth >= 600) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [fed, gap, st, gap, loc, gap, lt],
+                );
+              }
+              return Column(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [fed, gap, st],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [loc, gap, lt],
+                  ),
+                ],
+              );
+            },
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 18),
@@ -712,7 +733,6 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                flex: 2,
                 child: TextField(
                   controller: _tickerCtrl,
                   focusNode: _tickerFocus,
@@ -753,7 +773,6 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
               ),
               const SizedBox(width: 10),
               Expanded(
-                flex: 3,
                 child: TextField(
                   controller: _rocCtrl,
                   textAlign: TextAlign.right,

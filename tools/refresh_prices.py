@@ -84,6 +84,25 @@ def fetch_ticker(ticker):
     }
 
 
+def write_csvs(tickers, root):
+    """Tidy long-format CSVs next to the JSON — the Info-tab download links.
+    prices_history.csv (ticker,date,close) + distributions_history.csv
+    (ticker,ex_date,amount)."""
+    prices = os.path.join(root, "data", "prices_history.csv")
+    dists = os.path.join(root, "data", "distributions_history.csv")
+    with open(prices, "w") as f:
+        f.write("ticker,date,close\n")
+        for t in sorted(tickers):
+            for d, c in sorted(tickers[t]["closes"].items()):
+                f.write(f"{t},{d},{c}\n")
+    with open(dists, "w") as f:
+        f.write("ticker,ex_date,amount\n")
+        for t in sorted(tickers):
+            for d, a in sorted(tickers[t].get("dividends", {}).items()):
+                f.write(f"{t},{d},{a}\n")
+    return prices, dists
+
+
 def main():
     tickers = [t.upper() for t in sys.argv[1:]] or UNIVERSE
     root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
@@ -116,11 +135,13 @@ def main():
         )
         f.write("\n")
 
+    write_csvs(out, root)
+
     n_close = sum(len(v["closes"]) for v in out.values())
     size = os.path.getsize(dest)
     print(f"\n{ok}/{len(tickers)} tickers fetched · {len(out)} total · "
           f"{n_close} close points · {size // 1024} KB · as of {as_of}")
-    print(f"Wrote {dest}")
+    print(f"Wrote {dest} + prices_history.csv + distributions_history.csv")
 
 
 if __name__ == "__main__":

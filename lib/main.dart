@@ -2436,6 +2436,11 @@ class _PassPill extends StatelessWidget {
 
 // Info tab: a short user guide — what the app tells you, how to use it, and how
 // to read each result line — plus disclaimers and About/links.
+/// Raw-GitHub base for the committed history CSVs (kept current on main by the
+/// daily refresh workflow).
+const String _dataBase =
+    'https://raw.githubusercontent.com/jimzucker/TrueYield/main/data';
+
 class _InfoTab extends StatelessWidget {
   const _InfoTab();
 
@@ -2538,6 +2543,26 @@ class _InfoTab extends StatelessWidget {
               _RocStat(value: '$rocPoints', label: 'distributions'),
               _RocStat(value: kRocHistoryAsOf, label: 'last updated'),
             ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Download the full history as CSV:',
+            style: TextStyle(color: muted),
+          ),
+          const _AboutLink(
+            icon: Icons.download_outlined,
+            label: 'Return of capital (ticker, payable date, ROC %)',
+            url: '$_dataBase/roc_history.csv',
+          ),
+          const _AboutLink(
+            icon: Icons.download_outlined,
+            label: 'Daily prices (ticker, date, close)',
+            url: '$_dataBase/prices_history.csv',
+          ),
+          const _AboutLink(
+            icon: Icons.download_outlined,
+            label: 'Distributions (ticker, ex-date, amount)',
+            url: '$_dataBase/distributions_history.csv',
           ),
           const Divider(height: 28),
           Text('Disclaimers', style: section),

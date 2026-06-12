@@ -214,6 +214,16 @@ def save_history(history, path):
         f.write("\n")
 
 
+def write_history_csv(history, path):
+    """Tidy long-format ROC CSV (ticker,payable_date,roc_pct) — an Info-tab
+    download link."""
+    with open(path, "w") as f:
+        f.write("ticker,payable_date,roc_pct\n")
+        for t in sorted(history):
+            for d in sorted(history[t]):
+                f.write(f"{t},{d},{history[t][d]}\n")
+
+
 def _epoch(iso):
     y, m, d = (int(x) for x in iso.split("-"))
     return int(datetime(y, m, d, tzinfo=timezone.utc).timestamp())
@@ -267,6 +277,7 @@ def main():
     hist_path = os.path.join(root, "data", "roc_history.json")
     history = merge_history(load_history(hist_path), build_history(paths))
     save_history(history, hist_path)
+    write_history_csv(history, os.path.join(root, "data", "roc_history.csv"))
     write_history_dart(
         history, as_of, os.path.join(root, "lib", "roc_history.dart")
     )

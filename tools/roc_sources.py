@@ -398,6 +398,7 @@ def main():
     fresh = collect()
     merged = rr.merge_history(rr.load_history(hist_path), fresh)
     rr.save_history(merged, hist_path)
+    rr.write_history_csv(merged, os.path.join(root, "data", "roc_history.csv"))
     as_of = date.today().isoformat()
     rr.write_history_dart(merged, as_of, os.path.join(root, "lib", "roc_history.dart"))
     n = sum(len(v) for v in merged.values())

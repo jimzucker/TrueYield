@@ -118,6 +118,10 @@ void main() {
     expect(find.text('funds'), findsOneWidget);
     expect(find.text('distributions'), findsOneWidget);
     expect(find.text('last updated'), findsOneWidget);
+
+    // CSV download links.
+    expect(find.text('Download the full history as CSV:'), findsOneWidget);
+    expect(find.byIcon(Icons.download_outlined), findsNWidgets(3));
   });
 
   testWidgets('empty data tabs show "Run Calculate to populate."', (

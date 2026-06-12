@@ -954,6 +954,7 @@ void main() {
     test('covers no lots, <12M, >12M, >2Y, multiple, and a closed lot', () {
       expect(scenarios.map((s) => s.label), [
         'No lots',
+        '1 lot ≡ default',
         '1 lot · 3 months',
         '1 lot · 18 months',
         '1 lot · 30 months',

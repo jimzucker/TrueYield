@@ -853,15 +853,32 @@ List<DiagnosticScenario> buildDiagnostics(DateTime now) {
     ],
   );
 
+  final baseline = run(null); // the canonical "1 share, full window" result
   return [
     scn(
       'No lots',
       '1 share held the full ~3y window · all distributions reinvested',
-      run(null),
+      baseline,
       costExp: 10, // 1 share × $10 start
       valueExp: 26.04, // 1.3021 DRIP shares × $20 now
       sharesExp: 1.30,
       returnPctExp: 155.01,
+    ),
+    // Invariant: a single 1-share lot bought at the window start must reproduce
+    // the "No lots" default exactly (checked against baseline, not pinned).
+    scn(
+      '1 lot ≡ default',
+      'one 1-share lot at the window start must equal "No lots"',
+      run([
+        Lot(
+          buyDate: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+          shares: 1,
+        ),
+      ]),
+      costExp: baseline.totalCost,
+      valueExp: baseline.nav,
+      sharesExp: baseline.dripShares,
+      returnPctExp: baseline.totalReturnAfterTax * 100,
     ),
     scn(
       '1 lot · 3 months',

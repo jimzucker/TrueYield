@@ -2662,6 +2662,7 @@ class _InfoTab extends StatelessWidget {
       0,
       (sum, m) => sum + m.length,
     );
+    final rocTickers = kRocByTickerByEpoch.keys.toList()..sort();
     final rocEpochs = kRocByTickerByEpoch.values.expand((m) => m.keys);
     final rocSinceYear = rocEpochs.isEmpty
         ? null
@@ -2777,6 +2778,36 @@ class _InfoTab extends StatelessWidget {
             'download links live at the bottom of the Distributions and '
             'Prices tabs.',
             style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Tracked funds ($rocFunds) — any other ticker still works, just '
+            'without bundled ROC:',
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final t in rocTickers)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    t,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+            ],
           ),
           const Divider(height: 12),
           const _InfoSection(

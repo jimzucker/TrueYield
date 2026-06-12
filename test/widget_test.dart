@@ -122,6 +122,9 @@ void main() {
     expect(find.text('distributions'), findsOneWidget);
     expect(find.textContaining('Daily prices for'), findsOneWidget);
     expect(find.textContaining('Updated '), findsOneWidget);
+    // The tracked-funds chip list.
+    expect(find.textContaining('Tracked funds'), findsOneWidget);
+    expect(find.text('QYLD'), findsOneWidget);
     // CSV download links moved to the Distributions/Prices tabs (see below).
   });
 

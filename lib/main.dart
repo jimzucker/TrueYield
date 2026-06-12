@@ -1383,7 +1383,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 5,
+      length: 6,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('TrueYield'),
@@ -1392,6 +1392,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
             tabAlignment: TabAlignment.center,
             tabs: [
               Tab(text: 'Calculate'),
+              Tab(text: 'Lots'),
               Tab(text: 'Distributions'),
               Tab(text: 'Prices'),
               Tab(text: 'Info'),
@@ -1403,6 +1404,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
           child: TabBarView(
             children: [
               _buildCalculateTab(context),
+              _LotsTab(result: _result),
               _DistributionsTab(
                 result: _result,
                 rocOverrides: _rocOverrides,
@@ -1950,6 +1952,191 @@ class _LotRowState extends State<_LotRow> {
   }
 }
 
+// Lots tab: full per-lot detail — one card per purchase (open or closed) with
+// its dates, prices, shares, cost, distributions, income, tax, G/L, and return.
+class _LotsTab extends StatelessWidget {
+  final YieldResult? result;
+  const _LotsTab({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    final r = result;
+    final theme = Theme.of(context);
+    if (r == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Run Calculate to populate.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    if (!r.qualifies) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            '${r.ticker}: ${r.reason ?? 'does not qualify'}.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    if (r.isDefaultLot) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'No lots entered — the result uses the default 1-share view. Add '
+            'lots on the Calculate tab to track real positions here.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+    final afterTaxValue = r.nav - r.taxThisYear;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+      children: [
+        Text(r.ticker, style: theme.textTheme.titleLarge),
+        const SizedBox(height: 4),
+        Text(
+          '${r.lots.length} lots · ${_money(r.totalCost)} cost → '
+          '${_money(r.nav)} value',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _StmtRow(
+          label: 'Total return after tax',
+          sub: '${_money(r.totalCost)} → ${_money(afterTaxValue)} on your cost',
+          value: _signedPct(r.totalReturnAfterTax),
+          valueColor: _signColor(r.totalReturnAfterTax),
+          headline: true,
+        ),
+        const SizedBox(height: 8),
+        for (final l in r.lots)
+          _LotDetailCard(lot: l, currentPrice: r.currentPrice),
+      ],
+    );
+  }
+}
+
+class _LotDetailCard extends StatelessWidget {
+  final LotResult lot;
+  final double currentPrice;
+  const _LotDetailCard({required this.lot, required this.currentPrice});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l = lot;
+    final growthPct = (l.sharesGrowth * 100);
+
+    Widget kv(String k, String v, {Color? color}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            k,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Text(
+            v,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: color,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${fmtShares(l.initialShares)} sh · bought '
+                    '${fmtDateHuman(l.buyDate)}',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: l.isClosed
+                        ? theme.colorScheme.tertiaryContainer
+                        : theme.colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    l.isClosed ? 'Sold' : 'Open',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: l.isClosed
+                          ? theme.colorScheme.onTertiaryContainer
+                          : theme.colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 18),
+            kv('Bought', '${fmtDateHuman(l.buyDate)} @ ${_money(l.buyPrice)}'),
+            kv(
+              l.isClosed ? 'Sold' : 'Held',
+              l.isClosed
+                  ? '${fmtDateHuman(l.sellDate!)} @ ${_money(l.sellPrice!)}'
+                  : 'to today @ ${_money(currentPrice)}',
+            ),
+            kv(
+              'Shares (DRIP)',
+              '${fmtShares(l.initialShares)} → ${fmtShares(l.finalShares)} '
+                  '(+${growthPct.toStringAsFixed(growthPct < 10 ? 1 : 0)}%)',
+            ),
+            kv('Principal (cost)', _money(l.cost)),
+            kv('Distributions received', _money(l.distributions)),
+            kv('Income (taxable)', _signedMoney(l.incomeAmount), color: _gain),
+            kv('Tax this year', _signedMoney(-l.taxThisYear), color: _loss),
+            kv(l.isClosed ? 'Value at sale' : 'Value now', _money(l.nav)),
+            kv(
+              l.isClosed ? 'Realized G/L' : 'Unrealized G/L',
+              _signedMoney(l.gl),
+              color: _signColor(l.gl),
+            ),
+            const Divider(height: 18),
+            kv(
+              'Total return (after tax)',
+              _signedPct(l.totalReturnAfterTax),
+              color: _signColor(l.totalReturnAfterTax),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // Diagnostics tab: runs the lot math on deterministic synthetic data across a
 // range of holding periods so anyone can sanity-check it without a network call.
 class _DiagnosticsTab extends StatelessWidget {
@@ -2273,7 +2460,8 @@ class _InfoTab extends StatelessWidget {
             '•  Not investment advice — figures are historical (trailing 12 '
             'months), not a forecast.\n'
             '•  US tax model: one combined marginal rate on the taxable (non-ROC) '
-            'portion of distributions.\n'
+            'portion of distributions. Capital-gains tax is NOT modeled, so a '
+            'sold lot’s realized gain is shown before any gains tax.\n'
             '•  Return of capital % is your assumption — set it from the '
             'fund’s latest Section 19a notice.\n'
             '•  Data is Yahoo Finance’s public, unofficial endpoint and can '
@@ -2530,7 +2718,7 @@ class _ResultCard extends StatelessWidget {
             if (r.realizedGL != 0)
               _StmtRow(
                 label: 'Realized G/L',
-                sub: 'booked on sold lots',
+                sub: 'booked at sale · before capital-gains tax',
                 value: _signedMoney(r.realizedGL),
                 valueColor: _signColor(r.realizedGL),
                 nested: true,
@@ -2547,9 +2735,11 @@ class _ResultCard extends StatelessWidget {
               ),
             _StmtRow(
               label: 'Tax this year',
-              sub:
-                  '${(r.combinedRate * 100).toStringAsFixed(0)}% on the '
-                  '${_money(r.incomeAmount)} income',
+              sub: r.realizedGL != 0
+                  ? '${(r.combinedRate * 100).toStringAsFixed(0)}% income tax only '
+                        '(no capital-gains tax modeled)'
+                  : '${(r.combinedRate * 100).toStringAsFixed(0)}% on the '
+                        '${_money(r.incomeAmount)} income',
               value: _signedMoney(-r.taxThisYear),
               valueColor: _loss,
               nested: true,

@@ -48,12 +48,13 @@ void main() {
     expect(find.text('Calculate'), findsNWidgets(2));
   });
 
-  testWidgets('five tabs are present', (tester) async {
+  testWidgets('six tabs are present', (tester) async {
     await tester.pumpWidget(const TrueYieldApp());
     await tester.pump();
 
-    expect(find.byType(Tab), findsNWidgets(5));
+    expect(find.byType(Tab), findsNWidgets(6));
     expect(find.widgetWithText(Tab, 'Calculate'), findsOneWidget);
+    expect(find.widgetWithText(Tab, 'Lots'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Distributions'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Prices'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Info'), findsOneWidget);

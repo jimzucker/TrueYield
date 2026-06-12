@@ -322,6 +322,125 @@ def tappalpha():
         r"https://cdn\.prod\.website-files\.com/[^\"']*?TSPY[^\"']*?19a[^\"']*?\.pdf")
 
 
+_MONTHS_NAME = [
+    "january", "february", "march", "april", "may", "june", "july",
+    "august", "september", "october", "november", "december",
+]
+
+
+def _get_plain(url):
+    """Invesco's Akamai WAF 406s a *browser* UA but serves a plain one fine."""
+    req = urllib.request.Request(url, headers={"User-Agent": "Python-urllib/3.12"})
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        return r.read()
+
+
+def _invesco_pbp_roc(pdf_bytes):
+    """PBP row: NII · GainFromSale · ReturnOfPrincipal · NetUnrealizedDepr (per
+    share $; '$ -' = 0). ROC% = RoP / (NII + Gain + RoP)."""
+    import io
+    import pdfplumber
+    f = lambda s: 0.0 if s.replace(" ", "") == "-" else float(s.replace(" ", ""))
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        for p in pdf.pages:
+            for line in (p.extract_text() or "").splitlines():
+                if re.match(r"^PBP\s", line):
+                    nums = re.findall(r"\$\s*([\d][\d.\s]*\d|\d|-)", line)
+                    if len(nums) >= 3:
+                        nii, gain, rop = f(nums[0]), f(nums[1]), f(nums[2])
+                        tot = nii + gain + rop
+                        return round(rop / tot * 100, 1) if tot > 0 else None
+    return None
+
+
+def invesco(div_dates):
+    """PBP — one combined monthly Invesco notice per pay month; fetch the notice
+    for each Yahoo distribution's month and key the ROC by that ex-date so it
+    matches in-app."""
+    base = ("https://www.invesco.com/content/dam/invesco/us/en/documents/"
+            "section-19a/Invesco-19a-section-notice-{}-{}.pdf")
+    d, cache = {}, {}
+    for ex in div_dates.get("PBP", [])[-18:]:
+        y, m, _ = (int(x) for x in ex.split("-"))
+        if (y, m) not in cache:
+            try:
+                data = _get_plain(base.format(_MONTHS_NAME[m - 1], y))
+                cache[(y, m)] = data if data.startswith(b"%PDF") else None
+            except Exception:
+                cache[(y, m)] = None
+        data = cache[(y, m)]
+        if data:
+            roc = _invesco_pbp_roc(data)
+            if roc is not None:
+                d[ex] = roc
+    print(f"  Invesco PBP: {len(d)} dates")
+    return {"PBP": d} if d else {}
+
+
+_FT_NUM = r"(\$[\d,]+\.\d+|-)"
+_FT_PCT = r"([\d.]+%|-)"
+
+
+def _ft_row_roc(pdf_bytes, ticker):
+    """First Trust notices are row-per-fund and pdfplumber linearizes them. Read
+    the CURRENT table (before the cumulative one); ROC of 0 prints as '-'."""
+    import io
+    import pdfplumber
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+    current = re.split(r"Total Cumulative|Cumulative\s+Fiscal", text)[0]
+    row = re.compile(
+        rf"^{ticker}(?:\s*\(\d+\))?\s+[0-9A-Z]{{9}}\s+\S+\s+\w+\s+"
+        + r"\s+".join([_FT_NUM] * 5)   # Total, NII, STCG, LTCG, ROC ($)
+        + r"\s+" + r"\s+".join([_FT_PCT] * 4)  # NII, STCG, LTCG, ROC (%)
+    )
+    money = lambda s: None if s == "-" else float(s.replace("$", "").replace(",", ""))
+    pct = lambda s: None if s == "-" else float(s.rstrip("%"))
+    for line in current.splitlines():
+        m = row.match(line.strip())
+        if m:
+            g = m.groups()  # 0..8: Total,NII,STCG,LTCG,ROC$, NII%,STCG%,LTCG%,ROC%
+            roc_pct = pct(g[8])
+            if roc_pct is None:
+                total, roc_d = money(g[0]), money(g[4])
+                roc_pct = round(roc_d / total * 100, 1) if roc_d and total else 0.0
+            return round(roc_pct, 1)
+    return None
+
+
+def firsttrust():
+    """FTHI/FTQI/EIPI — scrape the per-ticker 19a-1 archive for GUID PDFs (paired
+    with their notice date), then parse each fund's ROC row."""
+    arch = ("https://www.ftportfolios.com/Retail/Etf/Etffundnewsarchive.aspx"
+            "?Ticker={}&SubCategoryCode=19A1_NOTICES")
+    loader = "https://www.ftportfolios.com/Common/ContentFileLoader.aspx?ContentGUID={}"
+    out = {}
+    for t in ["FTHI", "FTQI", "EIPI"]:
+        try:
+            html = _get(arch.format(t))
+        except Exception as e:
+            print(f"  FirstTrust {t}: archive failed ({e})"); continue
+        pairs = re.findall(
+            r"ContentGUID=([0-9a-f-]{36}).{0,400}?19a-1 Notice\s*[–\-]\s*"
+            r"(\d{1,2}/\d{1,2}/\d{4})", html, re.S)
+        d, seen = {}, set()
+        for guid, datestr in pairs:
+            if guid in seen:
+                continue
+            seen.add(guid)
+            mo, da, yr = (int(x) for x in datestr.split("/"))
+            try:
+                roc = _ft_row_roc(_get(loader.format(guid), binary=True), t)
+            except Exception:
+                continue
+            if roc is not None:
+                d[date(yr, mo, da).isoformat()] = roc
+        if d:
+            out[t] = d
+        print(f"  FirstTrust {t}: {len(d)} dates")
+    return out
+
+
 def amplify(div_dates):
     """DIVO/QDVO — the tax-center listing is 403, but the per-notice PDF URL is
     constructable from the pay date (= Yahoo ex-date + 1, verified). Try a small
@@ -390,7 +509,7 @@ def constants(div_dates):
 ADAPTERS = {
     "neos": neos, "globalx": globalx, "proshares": proshares,
     "ishares": ishares, "rex": rex, "vistashares": vistashares,
-    "tappalpha": tappalpha,
+    "tappalpha": tappalpha, "firsttrust": firsttrust,
 }
 
 
@@ -413,6 +532,7 @@ def collect():
         history.update(fn())
     dd = _div_dates()
     history.update(amplify(dd))
+    history.update(invesco(dd))
     history.update(roundhill(dd))
     history.update(constants(dd))
     return history
@@ -426,6 +546,8 @@ def main():
             res = roundhill(_div_dates())
         elif name == "amplify":
             res = amplify(_div_dates())
+        elif name == "invesco":
+            res = invesco(_div_dates())
         elif name == "constants":
             res = constants(_div_dates())
         elif fn:

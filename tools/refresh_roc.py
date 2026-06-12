@@ -42,18 +42,14 @@ GROUPS = {
 }
 BASE = "https://yieldmaxetfs.com/wp-content/uploads/TaxDocuments"
 
-# Funds whose per-distribution 19a-1 source isn't scriptable yet (First Trust's
-# PDF table doesn't linearize, Goldman's notice URLs are JS-gated GUIDs, Invesco
-# blocks scripted GETs). Carry a verified recent ROC% so they still auto-fill a
-# fund-appropriate default. Drop a fund once a real adapter lands. Values from
-# the 2026 notices (see reference-roc-19a-sources memory).
+# Goldman GPIX/GPIQ have no headless-scriptable per-distribution source — the
+# notice URLs are JS-gated GUIDs only discoverable via web search (see
+# reference-roc-19a-sources). Carry a verified recent ROC% so they still auto-fill
+# a fund-appropriate default. (First Trust, Invesco and Amplify now have real
+# adapters in roc_sources.py.)
 CARRY = {
-    "FTHI": 94.0,
-    "FTQI": 98.0,
-    "EIPI": 0.0,
     "GPIX": 70.0,
     "GPIQ": 72.0,
-    "PBP": 24.0,
 }
 
 WEEKS_BACK = 26  # how many recent weekly notices to try per group

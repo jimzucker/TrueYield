@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install pypdf
+      - run: pip install pypdf pdfplumber
 
       # dart format keeps the generated .dart files clean so CI stays green.
       - uses: dart-lang/setup-dart@v1

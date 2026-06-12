@@ -19,15 +19,17 @@ TrueYield is a mobile app that takes a ticker and your marginal tax rates and an
 <table>
 <tr>
 <td width="33%" align="center"><b>Calculate</b><br/><sub>Total return after tax, then the full breakdown</sub></td>
-<td width="33%" align="center"><b>Distributions</b><br/><sub>Every payout in the trailing 12 months</sub></td>
-<td width="33%" align="center"><b>Prices</b><br/><sub>Daily closes behind the math</sub></td>
+<td width="33%" align="center"><b>Lots</b><br/><sub>Real buy/sell dates with per-lot G/L</sub></td>
+<td width="33%" align="center"><b>Distributions</b><br/><sub>Each payout split into return of capital vs taxable</sub></td>
 </tr>
 <tr>
 <td><img src="docs/screenshots/calculate-result.png" alt="Calculate tab showing total return after tax"/></td>
-<td><img src="docs/screenshots/distributions.png" alt="Distributions tab listing each payout"/></td>
-<td><img src="docs/screenshots/prices.png" alt="Prices tab listing daily closes"/></td>
+<td><img src="docs/screenshots/lots.png" alt="Lots tab showing per-lot detail and gain/loss"/></td>
+<td><img src="docs/screenshots/distributions.png" alt="Distributions tab splitting each payout into return of capital and taxable income"/></td>
 </tr>
 </table>
+
+<sub>Also: <b>Prices</b> (the daily closes behind the math), <b>Info</b> (this guide, the tracked-fund list, and CSV downloads), and <b>Diagnostics</b> (self-test scenarios).</sub>
 
 ## Why TrueYield
 

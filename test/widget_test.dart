@@ -117,7 +117,7 @@ void main() {
     expect(find.text('Bundled ROC data'), findsOneWidget);
     expect(find.text('funds'), findsOneWidget);
     expect(find.text('distributions'), findsOneWidget);
-    expect(find.text('last updated'), findsOneWidget);
+    expect(find.textContaining('Updated '), findsOneWidget);
 
     // CSV download links.
     expect(find.text('Download the full history as CSV:'), findsOneWidget);

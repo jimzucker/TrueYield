@@ -2522,50 +2522,55 @@ class _InfoTab extends StatelessWidget {
             'to hold to today. No lots = one share bought a year ago.\n'
             '5.  Tap Calculate.',
           ),
-          const Divider(height: 28),
-          Text('Reading the result', style: section),
-          const SizedBox(height: 10),
-          const _InfoTerm(
-            term: 'Total return after tax',
-            desc:
-                'The bottom line — what one share bought a year ago is worth now, '
-                'net of this year’s tax: income and price change together.',
+          const Divider(height: 12),
+          const _InfoSection(
+            title: 'Reading the result',
+            children: [
+              _InfoTerm(
+                term: 'Total return after tax',
+                desc:
+                    'The bottom line — what one share bought a year ago is worth '
+                    'now, net of this year’s tax: income and price change together.',
+              ),
+              _InfoTerm(
+                term: 'DRIP grew your shares',
+                desc:
+                    'Distributions are reinvested (a broker DRIP), compounding '
+                    'your share count — e.g. 1.00 → 1.59.',
+              ),
+              _InfoTerm(
+                term: 'Income / Unrealized G/L / Tax this year',
+                desc:
+                    'The three pieces that sum to the total: taxable income, the '
+                    'paper gain or loss on your shares, and the tax due now. With '
+                    'sold lots a Realized G/L line is added for gains booked at '
+                    'the sell price.',
+              ),
+              _InfoTerm(
+                term: 'Advertised vs After-tax yield',
+                desc:
+                    'The headline distribution yield vs what you actually keep '
+                    'after tax — both measured on today’s price.',
+              ),
+              _InfoTerm(
+                term: 'Reference grid',
+                desc:
+                    'The raw Price, Shares, Present Value, and Cost basis the '
+                    'math is built from — a year ago vs now.',
+              ),
+            ],
           ),
-          const _InfoTerm(
-            term: 'DRIP grew your shares',
-            desc:
-                'Distributions are reinvested (a broker DRIP), compounding your '
-                'share count — e.g. 1.00 → 1.59.',
+          const _InfoSection(
+            title: 'The other tabs',
+            children: [
+              Text(
+                '•  Distributions — every payout in the last 12 months, split '
+                'into return of capital vs taxable income.\n'
+                '•  Prices — the daily closes behind the calculation.',
+              ),
+            ],
           ),
-          const _InfoTerm(
-            term: 'Income / Unrealized G/L / Tax this year',
-            desc:
-                'The three pieces that sum to the total: taxable income, the '
-                'paper gain or loss on your shares, and the tax due now. With '
-                'sold lots a Realized G/L line is added for gains booked at the '
-                'sell price.',
-          ),
-          const _InfoTerm(
-            term: 'Advertised vs After-tax yield',
-            desc:
-                'The headline distribution yield vs what you actually keep after '
-                'tax — both measured on today’s price.',
-          ),
-          const _InfoTerm(
-            term: 'Reference grid',
-            desc:
-                'The raw Price, Shares, Present Value, and Cost basis the math is '
-                'built from — a year ago vs now.',
-          ),
-          const Divider(height: 28),
-          Text('The other tabs', style: section),
-          const SizedBox(height: 6),
-          const Text(
-            '•  Distributions — every payout in the last 12 months, split into '
-            'return of capital vs taxable income.\n'
-            '•  Prices — the daily closes behind the calculation.',
-          ),
-          const Divider(height: 28),
+          const Divider(height: 12),
           Text('Bundled ROC data', style: section),
           const SizedBox(height: 6),
           Text(
@@ -2578,8 +2583,12 @@ class _InfoTab extends StatelessWidget {
             children: [
               _RocStat(value: '$rocFunds', label: 'funds'),
               _RocStat(value: '$rocPoints', label: 'distributions'),
-              _RocStat(value: kRocHistoryAsOf, label: 'last updated'),
             ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Updated ${fmtDateHuman(DateTime.parse(kRocHistoryAsOf))}',
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
           ),
           const SizedBox(height: 10),
           Text(
@@ -2601,21 +2610,25 @@ class _InfoTab extends StatelessWidget {
             label: 'Distributions (ticker, ex-date, amount)',
             url: '$_dataBase/distributions_history.csv',
           ),
-          const Divider(height: 28),
-          Text('Disclaimers', style: section),
-          const SizedBox(height: 6),
-          const Text(
-            '•  Not investment advice — figures are historical (trailing 12 '
-            'months), not a forecast.\n'
-            '•  US tax model: one combined marginal rate on the taxable (non-ROC) '
-            'portion of distributions. Capital-gains tax is NOT modeled, so a '
-            'sold lot’s realized gain is shown before any gains tax.\n'
-            '•  Return of capital % is your assumption — set it from the '
-            'fund’s latest Section 19a notice.\n'
-            '•  Data is Yahoo Finance’s public, unofficial endpoint and can '
-            'change without notice.',
+          const Divider(height: 12),
+          const _InfoSection(
+            title: 'Disclaimers',
+            children: [
+              Text(
+                '•  Not investment advice — figures are historical (trailing 12 '
+                'months), not a forecast.\n'
+                '•  US tax model: one combined marginal rate on the taxable '
+                '(non-ROC) portion of distributions. Capital-gains tax is NOT '
+                'modeled, so a sold lot’s realized gain is shown before any '
+                'gains tax.\n'
+                '•  Return of capital % is your assumption — set it from the '
+                'fund’s latest Section 19a notice.\n'
+                '•  Data is Yahoo Finance’s public, unofficial endpoint and can '
+                'change without notice.',
+              ),
+            ],
           ),
-          const Divider(height: 28),
+          const Divider(height: 12),
           Text('About', style: section),
           const SizedBox(height: 8),
           const _AboutLink(
@@ -2647,6 +2660,35 @@ class _InfoTab extends StatelessWidget {
             style: TextStyle(fontSize: 12, color: muted),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A collapsible Info-tab section so the page opens compact instead of as one
+/// long wall of text. Header matches the always-visible section style.
+class _InfoSection extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+  const _InfoSection({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        title: Text(
+          title,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        tilePadding: EdgeInsets.zero,
+        expandedAlignment: Alignment.topLeft,
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        children: children,
       ),
     );
   }

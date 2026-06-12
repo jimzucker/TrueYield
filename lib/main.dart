@@ -1442,21 +1442,28 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
             ],
           ),
         ),
+        // Cap the content width and center it so the form/cards don't stretch
+        // edge-to-edge on a wide desktop/web window (mobile is unaffected).
         body: SafeArea(
-          child: TabBarView(
-            children: [
-              _buildCalculateTab(context),
-              _LotsTab(result: _result),
-              _DistributionsTab(
-                result: _result,
-                rocOverrides: _rocOverrides,
-                defaultRoc: double.tryParse(_rocCtrl.text.trim()) ?? 0,
-                onRocChanged: _setRocOverride,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: TabBarView(
+                children: [
+                  _buildCalculateTab(context),
+                  _LotsTab(result: _result),
+                  _DistributionsTab(
+                    result: _result,
+                    rocOverrides: _rocOverrides,
+                    defaultRoc: double.tryParse(_rocCtrl.text.trim()) ?? 0,
+                    onRocChanged: _setRocOverride,
+                  ),
+                  _PricesTab(result: _result),
+                  const _InfoTab(),
+                  const _DiagnosticsTab(),
+                ],
               ),
-              _PricesTab(result: _result),
-              const _InfoTab(),
-              const _DiagnosticsTab(),
-            ],
+            ),
           ),
         ),
       ),

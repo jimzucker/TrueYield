@@ -29,7 +29,7 @@ const Map<String, double> kRocByTicker = {
   'CVRD': 0.0,
   'DIPS': 36.5,
   'DISO': 41.0,
-  'DIVO': 66.3,
+  'DIVO': 67.6,
   'DJIA': 89.6,
   'DRAY': 81.1,
   'EIPI': 21.1,

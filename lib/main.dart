@@ -2986,11 +2986,11 @@ class _AboutLink extends StatelessWidget {
     return InkWell(
       onTap: onTap ?? _launch,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
+        constraints: const BoxConstraints(minHeight: 36),
         child: Align(
           alignment: Alignment.centerLeft,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: 3),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

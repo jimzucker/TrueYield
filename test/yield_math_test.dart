@@ -912,6 +912,35 @@ void main() {
     });
   });
 
+  group('lastTradingDay', () {
+    test('returns the most recent weekday on or before the date', () {
+      // 2026-06-12 is a Friday → itself.
+      expect(
+        lastTradingDay(DateTime.utc(2026, 6, 12)),
+        DateTime.utc(2026, 6, 12),
+      );
+      // Saturday and Sunday roll back to that Friday.
+      expect(
+        lastTradingDay(DateTime.utc(2026, 6, 13)),
+        DateTime.utc(2026, 6, 12),
+      );
+      expect(
+        lastTradingDay(DateTime.utc(2026, 6, 14)),
+        DateTime.utc(2026, 6, 12),
+      );
+      // Monday → itself.
+      expect(
+        lastTradingDay(DateTime.utc(2026, 6, 15)),
+        DateTime.utc(2026, 6, 15),
+      );
+      // The clock time is dropped (date only).
+      expect(
+        lastTradingDay(DateTime.utc(2026, 6, 15, 23, 59)),
+        DateTime.utc(2026, 6, 15),
+      );
+    });
+  });
+
   group('lots — holding periods (Diagnostics scenarios)', () {
     final scenarios = buildDiagnostics(DateTime.utc(2026, 6, 12));
     DiagnosticScenario byLabel(String l) =>

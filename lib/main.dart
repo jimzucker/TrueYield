@@ -688,6 +688,16 @@ String yahooRangeFor(DateTime earliestBuy, DateTime now) {
   return 'max';
 }
 
+/// Most recent weekday on or before [now] (a stand-in for the last trading day;
+/// ignores market holidays). Used as the default buy date for a new lot. Pure.
+DateTime lastTradingDay(DateTime now) {
+  var d = DateTime.utc(now.year, now.month, now.day);
+  while (d.weekday == DateTime.saturday || d.weekday == DateTime.sunday) {
+    d = d.subtract(const Duration(days: 1));
+  }
+  return d;
+}
+
 /// One self-test scenario for the Diagnostics tab: a labeled [YieldResult]
 /// computed from synthetic data, used to sanity-check the lot math.
 class DiagnosticScenario {
@@ -808,6 +818,11 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   // The ticker whose bundled ROC we last auto-filled into the ROC field, so we
   // only re-apply when the ticker actually changes to a different known fund.
   String? _rocSourceTicker;
+
+  // Price bars from the last successful fetch, plus the ticker they're for, so a
+  // new/edited lot can default its cost to the close on the buy date.
+  List<PriceBar> _lastBars = const [];
+  String _lastBarsTicker = '';
 
   static const _kTicker = 'last_ticker';
   static const _kFederal = 'rate_federal';
@@ -967,6 +982,19 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   // null when no explicit lots → compute() uses the single default lot.
   List<Lot>? _activeLots() => _lots.isEmpty ? null : _lots;
 
+  // Closing price on [date] from the last fetch, but only when it's for the
+  // ticker currently in the field (so we never apply a stale fund's price).
+  // null when we have no matching data yet — the cost is then derived from the
+  // market price at calculate time instead.
+  double? _closeOn(DateTime date) {
+    if (_lastBars.isEmpty) return null;
+    if (_lastBarsTicker != _tickerCtrl.text.trim().toUpperCase()) return null;
+    return YieldMath.priceAt(date, _lastBars);
+  }
+
+  // Round a dollar amount to cents for the cost field.
+  static double _round2(double v) => (v * 100).roundToDouble() / 100;
+
   // Yahoo dividend epoch (seconds) — the stable key for a ROC override.
   int _epochOf(DateTime d) => d.toUtc().millisecondsSinceEpoch ~/ 1000;
 
@@ -1103,6 +1131,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       setState(() {
         _result = result;
         _resultFetchedAt = DateTime.now();
+        _lastBars = result.priceBars;
+        _lastBarsTicker = result.ticker;
         _loading = false;
       });
       // Slide the inputs up so the full result card (through the reference
@@ -1414,13 +1444,15 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                 ),
                 TextButton.icon(
                   onPressed: () => _mutateLots(() {
-                    // Seed a new lot ~1 year ago, 100 shares (a sensible start
-                    // the user edits — they can add a cost too).
-                    final now = DateTime.now();
+                    // Default: 100 shares bought on the last trading day; cost
+                    // defaults to that day's close × shares when we have prices.
+                    final buyDate = lastTradingDay(DateTime.now());
+                    final close = _closeOn(buyDate);
                     _lots.add(
                       Lot(
-                        buyDate: DateTime.utc(now.year - 1, now.month, now.day),
+                        buyDate: buyDate,
                         shares: 100,
+                        cost: close == null ? null : _round2(100 * close),
                       ),
                     );
                   }),
@@ -1445,6 +1477,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                 _LotRow(
                   key: ValueKey(i),
                   lot: _lots[i],
+                  closeOn: _closeOn,
                   onChanged: (l) => _mutateLots(() => _lots[i] = l),
                   onRemove: () => _mutateLots(() => _lots.removeAt(i)),
                 ),
@@ -1455,16 +1488,19 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   }
 }
 
-// One editable purchase row: buy date, amount, and a shares/dollars toggle.
-// Owns its amount controller (seeded once in initState) so parent rebuilds on
-// each keystroke don't fight the user's cursor.
+// One editable purchase row: buy date plus optional shares and cost fields.
+// Owns its field controllers (seeded once in initState) so parent rebuilds on
+// each keystroke don't fight the user's cursor. [closeOn] returns the close on a
+// date when prices are available, so changing the buy date refreshes the cost.
 class _LotRow extends StatefulWidget {
   final Lot lot;
+  final double? Function(DateTime) closeOn;
   final ValueChanged<Lot> onChanged;
   final VoidCallback onRemove;
   const _LotRow({
     super.key,
     required this.lot,
+    required this.closeOn,
     required this.onChanged,
     required this.onRemove,
   });
@@ -1553,7 +1589,20 @@ class _LotRowState extends State<_LotRow> {
       lastDate: now,
     );
     if (picked == null) return;
-    _emit(buyDate: DateTime.utc(picked.year, picked.month, picked.day));
+    final buyDate = DateTime.utc(picked.year, picked.month, picked.day);
+    // Default the cost to that day's close × shares when prices are available,
+    // so the basis tracks the market unless the user overrides it.
+    final close = widget.closeOn(buyDate);
+    final shares = widget.lot.shares;
+    if (close != null && shares != null) {
+      final cost = (shares * close * 100).roundToDouble() / 100;
+      _costCtrl.text = cost == cost.roundToDouble()
+          ? cost.toStringAsFixed(0)
+          : cost.toStringAsFixed(2);
+      _emit(buyDate: buyDate, cost: cost, costSet: true);
+    } else {
+      _emit(buyDate: buyDate);
+    }
   }
 
   Future<void> _pickSellDate() async {

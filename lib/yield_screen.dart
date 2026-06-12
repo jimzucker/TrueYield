@@ -29,9 +29,11 @@ class YieldScreen extends StatefulWidget {
 class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   final _tickerCtrl = TextEditingController();
   final _tickerFocus = FocusNode();
-  final _federalCtrl = TextEditingController();
-  final _stateCtrl = TextEditingController();
-  final _localCtrl = TextEditingController(text: '0');
+  // Default marginal rates (a common high-tax-state profile); editable and
+  // remembered across tickers once the user changes them.
+  final _federalCtrl = TextEditingController(text: '24');
+  final _stateCtrl = TextEditingController(text: '6.85');
+  final _localCtrl = TextEditingController(text: '3.876');
   final _ltGainsCtrl = TextEditingController(text: '15');
   final _rocCtrl = TextEditingController(text: '71');
   final _scrollCtrl = ScrollController();
@@ -185,9 +187,9 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     final ticker = (prefs.getString(_kTicker) ?? '').trim().toUpperCase();
     setState(() {
       _tickerCtrl.text = prefs.getString(_kTicker) ?? '';
-      _federalCtrl.text = prefs.getString(_kFederal) ?? '';
-      _stateCtrl.text = prefs.getString(_kState) ?? '';
-      _localCtrl.text = prefs.getString(_kLocal) ?? '0';
+      _federalCtrl.text = prefs.getString(_kFederal) ?? '24';
+      _stateCtrl.text = prefs.getString(_kState) ?? '6.85';
+      _localCtrl.text = prefs.getString(_kLocal) ?? '3.876';
       _ltGainsCtrl.text = prefs.getString(_kLtGains) ?? '15';
       _rocCtrl.text = prefs.getString(_kRoc) ?? '71';
       _lotsByTicker = lotsByTicker;

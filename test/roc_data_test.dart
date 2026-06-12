@@ -18,15 +18,15 @@ import 'package:true_yield/roc_data.dart';
 
 void main() {
   group('rocForTicker (bundled 19a-1 ROC)', () {
-    test(
-      'looks up a known YieldMax fund, case- and whitespace-insensitive',
-      () {
-        // YMAG is a carried flagship value, stable across data refreshes.
-        expect(rocForTicker('YMAG'), 71.0);
-        expect(rocForTicker('ymag'), 71.0);
-        expect(rocForTicker('  YMAG  '), 71.0);
-      },
-    );
+    test('looks up a known YieldMax fund, case- and whitespace-insensitive', () {
+      // YMAG now carries a real value from its Group-1 19a-1 history (it
+      // shifts each refresh), so assert it resolves the same sane % three ways.
+      final ymag = rocForTicker('YMAG');
+      expect(ymag, isNotNull);
+      expect(ymag, inInclusiveRange(0, 100));
+      expect(rocForTicker('ymag'), ymag);
+      expect(rocForTicker('  YMAG  '), ymag);
+    });
 
     test('returns null for an unknown ticker', () {
       expect(rocForTicker('SCHD'), isNull);

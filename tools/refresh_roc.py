@@ -31,23 +31,27 @@ from datetime import date, datetime, timedelta, timezone
 
 from pypdf import PdfReader
 
-# Fund "Groups" we know the upload-folder path for. Other groups (incl. the
-# YMAG/YMAX funds-of-funds) use different folders; add them here as discovered.
+# Fund "Groups" we know the upload-folder path for, as
+# label -> (upload-folder, payable weekday: Mon=0 … Sun=6). The filename embeds
+# the same label. YieldMax reorganized in 2026: the single notice per group now
+# covers many funds. "Group 1" holds the funds-of-funds (YMAG, YMAX) + ULTY etc.
+# Notices are weekly but only filed on weeks with a non-income source, so many
+# dates 404 — that's a no-ROC week, not a wrong URL.
 GROUPS = {
-    "Group 2": "Group_2_Supplemental%20and%20Tax%20IRS%20Form%208937",
+    "Group 1": ("Group_1_Supplemental%20and%20Tax%20IRS%20Form%208937", 3),
 }
 BASE = "https://yieldmaxetfs.com/wp-content/uploads/TaxDocuments"
 
 # Funds we can't yet locate a notice folder for — carry the app's historical
 # default so they still auto-fill. Refresh once their group path is added above.
-CARRY = {"YMAG": 71.0, "YMAX": 71.0}
+CARRY = {}
 
-WEEKS_BACK = 12  # how many recent weekly notices to try per group
+WEEKS_BACK = 26  # how many recent weekly notices to try per group
 
 
-def recent_fridays(today, n):
-    """The n most recent Fridays on/before today, as date objects."""
-    d = today - timedelta(days=(today.weekday() - 4) % 7)  # back up to Friday
+def recent_weekdays(today, weekday, n):
+    """The n most recent dates on/before today falling on [weekday] (Mon=0)."""
+    d = today - timedelta(days=(today.weekday() - weekday) % 7)
     return [d - timedelta(weeks=i) for i in range(n)]
 
 
@@ -76,8 +80,8 @@ def fetch(url, dest):
 def download_notices(workdir):
     os.makedirs(workdir, exist_ok=True)
     paths = []
-    for label, folder in GROUPS.items():
-        for d in recent_fridays(date.today(), WEEKS_BACK):
+    for label, (folder, weekday) in GROUPS.items():
+        for d in recent_weekdays(date.today(), weekday, WEEKS_BACK):
             dest = os.path.join(workdir, f"{label.replace(' ', '_')}_{d}.pdf")
             if os.path.exists(dest) or fetch(notice_url(folder, label, d), dest):
                 paths.append(dest)
@@ -118,11 +122,18 @@ def parse_notice(path):
 
 
 def date_from_name(path):
-    m = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{2})(?!\d)", os.path.basename(path))
-    if not m:
-        return None
-    mo, da, yy = (int(x) for x in m.groups())
-    return date(2000 + yy, mo, da)
+    base = os.path.basename(path)
+    # Original notice names embed the payable date as M.D.YY ("12.5.25");
+    # auto-downloaded files are saved as ...{YYYY-MM-DD}.pdf.
+    m = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{2})(?!\d)", base)
+    if m:
+        mo, da, yy = (int(x) for x in m.groups())
+        return date(2000 + yy, mo, da)
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", base)
+    if m:
+        y, mo, da = (int(x) for x in m.groups())
+        return date(y, mo, da)
+    return None
 
 
 def aggregate(paths):
@@ -140,6 +151,18 @@ def aggregate(paths):
         for t, (roc, tot, n) in acc.items()
         if n >= threshold and tot > 0
     }
+    return out
+
+
+def trailing_from_history(history, n=8):
+    """Per-fund trailing ROC% (mean of each fund's most recent [n] payable
+    dates) — the kRocByTicker auto-fill default, covering every fund we have any
+    history for."""
+    out = {}
+    for t, dates in history.items():
+        pts = [dates[d] for d in sorted(dates)[-n:]]
+        if pts:
+            out[t] = round(sum(pts) / len(pts), 1)
     return out
 
 
@@ -268,8 +291,9 @@ def main():
     if not paths:
         sys.exit("No notice PDFs found/fetched.")
 
-    dates = [d for d in (date_from_name(p) for p in paths) if d]
-    as_of = max(dates).isoformat() if dates else date.today().isoformat()
+    # The refresh stamp is the generation date — multiple data sources, many
+    # lagging the notice dates, so "today" is the honest "as of".
+    as_of = date.today().isoformat()
 
     root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -282,13 +306,14 @@ def main():
         history, as_of, os.path.join(root, "lib", "roc_history.dart")
     )
 
-    # Trailing per-fund default (unchanged format).
-    roc = aggregate(paths)
+    # Trailing per-fund default (kRocByTicker), derived from the FULL merged
+    # history so every fund — not just this run's notices — keeps a value.
+    roc = trailing_from_history(history)
     dest = os.path.join(root, "lib", "roc_data.dart")
     merged = write_dart(roc, as_of, dest)
 
     n_dates = sum(len(v) for v in history.values())
-    print(f"{len(paths)} notices · {len(roc)} funds parsed · "
+    print(f"{len(paths)} notices · {len(roc)} funds · "
           f"{len(merged)} in roc_data (incl. {len(CARRY)} carried) · as of {as_of}")
     print(f"history: {len(history)} funds · {n_dates} dated ROC points")
     for t in sorted(merged):

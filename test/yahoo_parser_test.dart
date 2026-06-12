@@ -82,6 +82,58 @@ void main() {
     });
   });
 
+  group('parseYahooChart — per-distribution ROC precedence', () {
+    // One $5 payout on 2025-12-15; a 19a-1 payable date 2 days later carries 90%.
+    final divDate = DateTime.utc(2025, 12, 15);
+    final body = yahooChartJson(
+      price: 80,
+      months: [DateTime.utc(2025, 6), DateTime.utc(2026, 6)],
+      closes: [100, 80],
+      dividends: {divDate: 5.0},
+    );
+    int epoch(DateTime d) => d.toUtc().millisecondsSinceEpoch ~/ 1000;
+    final divEpoch = epoch(divDate);
+    final payableEpoch = epoch(DateTime.utc(2025, 12, 17)); // within tolerance
+
+    test('history fills a row when there is no override', () {
+      final r = parseYahooChart(
+        body,
+        ticker: 'TEST',
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        rocHistory: {payableEpoch: 90},
+      );
+      expect(r.distributions.single.rocPct, 90);
+    });
+
+    test('a user override beats history', () {
+      final r = parseYahooChart(
+        body,
+        ticker: 'TEST',
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        rocByDivEpoch: {divEpoch: 50},
+        rocHistory: {payableEpoch: 90},
+      );
+      expect(r.distributions.single.rocPct, 50);
+    });
+
+    test('no match leaves the row on the global default', () {
+      final r = parseYahooChart(
+        body,
+        ticker: 'TEST',
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        // A payable date 30 days off is outside the ~week tolerance.
+        rocHistory: {epoch(DateTime.utc(2026, 1, 15)): 90},
+      );
+      expect(r.distributions.single.rocPct, isNull);
+    });
+  });
+
   group('parseYahooChart — error branches', () {
     test('API error envelope throws its description', () {
       final body = yahooErrorJson('No data found, symbol may be delisted');

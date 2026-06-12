@@ -29,6 +29,27 @@ import 'roc_history.dart';
 double? rocForTicker(String ticker) =>
     kRocByTicker[ticker.trim().toUpperCase()];
 
+/// Per-payable-date ROC% history for [ticker] ([kRocByTickerByEpoch]), or null.
+Map<int, double>? rocHistoryForTicker(String ticker) =>
+    kRocByTickerByEpoch[ticker.trim().toUpperCase()];
+
+/// The bundled per-distribution ROC% nearest a Yahoo dividend (ex-date) [epoch],
+/// matched to its payable date in [hist] within a few days. Null if none close.
+double? rocFromHistory(Map<int, double>? hist, int epoch) {
+  if (hist == null || hist.isEmpty) return null;
+  const tolerance = 6 * 86400; // ex-date ≈ payable date, within ~a week
+  int? bestKey;
+  var bestDist = tolerance + 1;
+  for (final key in hist.keys) {
+    final dist = (key - epoch).abs();
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestKey = key;
+    }
+  }
+  return bestKey == null ? null : hist[bestKey];
+}
+
 /// Optional CORS proxy origin for the Yahoo Finance endpoint, supplied at build
 /// time via `--dart-define=YAHOO_PROXY=<origin>` (no trailing slash). It is used
 /// only on the web build, where the browser enforces CORS and Yahoo's endpoint
@@ -615,6 +636,9 @@ YieldResult parseYahooChart(
   // Per-distribution ROC overrides keyed by the Yahoo dividend epoch (seconds).
   // A matched entry overrides the global [rocPct] for that payout.
   Map<int, double>? rocByDivEpoch,
+  // Bundled per-payable-date ROC% history (from 19a-1 notices), keyed by payable
+  // epoch. Precedence per payout: user override > history > global [rocPct].
+  Map<int, double>? rocHistory,
   // One purchase per lot; null/empty → the single default lot.
   List<Lot>? lots,
 }) {
@@ -672,7 +696,7 @@ YieldResult parseYahooChart(
         DistributionEntry(
           date: DateTime.fromMillisecondsSinceEpoch(divTs * 1000, isUtc: true),
           amount: amt,
-          rocPct: rocByDivEpoch?[divTs],
+          rocPct: rocByDivEpoch?[divTs] ?? rocFromHistory(rocHistory, divTs),
         ),
       );
     }
@@ -1278,7 +1302,9 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
           DistributionEntry(
             date: d.date,
             amount: d.amount,
-            rocPct: _rocOverrides[_epochOf(d.date)],
+            rocPct:
+                _rocOverrides[_epochOf(d.date)] ??
+                rocFromHistory(rocHistoryForTicker(r.ticker), _epochOf(d.date)),
           ),
       ],
       priceBars: r.priceBars,
@@ -1415,6 +1441,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
         localPct: localPct,
         rocPct: rocPct,
         rocByDivEpoch: _rocOverrides,
+        rocHistory: rocHistoryForTicker(ticker),
         lots: _activeLots(),
       );
     } finally {
@@ -1456,6 +1483,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                   _DistributionsTab(
                     result: _result,
                     rocOverrides: _rocOverrides,
+                    rocHistory: rocHistoryForTicker(_result?.ticker ?? ''),
                     defaultRoc: double.tryParse(_rocCtrl.text.trim()) ?? 0,
                     onRocChanged: _setRocOverride,
                   ),
@@ -3401,11 +3429,15 @@ class _DistributionsTab extends StatelessWidget {
   // (seconds); a row with no override shows [defaultRoc]. [onRocChanged] sets
   // (or clears, with null) an override and recomputes the result in place.
   final Map<int, double> rocOverrides;
+  // Bundled per-payable-date ROC% history for this ticker (keyed by payable
+  // epoch), auto-filled per row when no user override exists.
+  final Map<int, double>? rocHistory;
   final double defaultRoc;
   final void Function(int epoch, double? pct) onRocChanged;
   const _DistributionsTab({
     required this.result,
     this.rocOverrides = const {},
+    this.rocHistory,
     this.defaultRoc = 0,
     this.onRocChanged = _noop,
   });
@@ -3504,8 +3536,9 @@ class _DistributionsTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Tap a row’s ROC % to override it (e.g. from a YieldMax '
-                  '19a-1 notice). Blank = the $rocInt% default above.',
+                  'Each row’s ROC % auto-fills from the fund’s Section 19a-1 '
+                  'notice when available, else the $rocInt% default. Tap any row '
+                  'to override it; clear it to revert.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -3568,7 +3601,8 @@ class _DistributionsTab extends StatelessWidget {
         }
         final d = r.distributions[i - 2];
         final epoch = d.date.toUtc().millisecondsSinceEpoch ~/ 1000;
-        final rocPct = rocOverrides[epoch] ?? defaultRoc;
+        final histRoc = rocFromHistory(rocHistory, epoch);
+        final rocPct = rocOverrides[epoch] ?? histRoc ?? defaultRoc;
         final rocDollars = d.amount * rocPct / 100;
         final num = theme.textTheme.bodyMedium?.copyWith(
           fontFeatures: const [FontFeature.tabularFigures()],
@@ -3613,6 +3647,7 @@ class _DistributionsTab extends StatelessWidget {
                 flex: 3,
                 child: _RocCell(
                   overrideRoc: rocOverrides[epoch],
+                  historyRoc: histRoc,
                   defaultRoc: defaultRoc,
                   onChanged: (pct) => onRocChanged(epoch, pct),
                 ),
@@ -3631,10 +3666,13 @@ class _DistributionsTab extends StatelessWidget {
 // on submit/focus-loss; an empty value clears the override (reverts to default).
 class _RocCell extends StatefulWidget {
   final double? overrideRoc;
+  // Auto-filled from the bundled 19a-1 history when present and not overridden.
+  final double? historyRoc;
   final double defaultRoc;
   final ValueChanged<double?> onChanged;
   const _RocCell({
     required this.overrideRoc,
+    this.historyRoc,
     required this.defaultRoc,
     required this.onChanged,
   });
@@ -3713,10 +3751,16 @@ class _RocCellState extends State<_RocCell> {
         },
       );
     }
+    // Three states: user override (primary, bold) > 19a-1 history (normal
+    // onSurface) > the global default assumption (muted).
     final hasOverride = widget.overrideRoc != null;
-    final shown = hasOverride
-        ? fmtNum(widget.overrideRoc!)
-        : fmtNum(widget.defaultRoc);
+    final hasHistory = !hasOverride && widget.historyRoc != null;
+    final value = widget.overrideRoc ?? widget.historyRoc ?? widget.defaultRoc;
+    final color = hasOverride
+        ? theme.colorScheme.primary
+        : hasHistory
+        ? theme.colorScheme.onSurface
+        : theme.colorScheme.onSurfaceVariant;
     return InkWell(
       onTap: _startEditing,
       borderRadius: BorderRadius.circular(6),
@@ -3725,12 +3769,10 @@ class _RocCellState extends State<_RocCell> {
         child: Align(
           alignment: Alignment.centerRight,
           child: Text(
-            '$shown%',
+            '${fmtNum(value)}%',
             style: theme.textTheme.bodyMedium?.copyWith(
               fontFeatures: const [FontFeature.tabularFigures()],
-              color: hasOverride
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurfaceVariant,
+              color: color,
               fontWeight: hasOverride ? FontWeight.w700 : FontWeight.w400,
               decoration: TextDecoration.underline,
               decorationStyle: TextDecorationStyle.dotted,

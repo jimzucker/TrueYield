@@ -120,6 +120,7 @@ void main() {
     expect(find.text('Bundled ROC data'), findsOneWidget);
     expect(find.text('funds'), findsOneWidget);
     expect(find.text('distributions'), findsOneWidget);
+    expect(find.textContaining('Daily prices for'), findsOneWidget);
     expect(find.textContaining('Updated '), findsOneWidget);
     // CSV download links moved to the Distributions/Prices tabs (see below).
   });

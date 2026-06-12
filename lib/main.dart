@@ -21,6 +21,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'price_coverage.dart';
 import 'roc_data.dart';
 import 'roc_history.dart';
 
@@ -2599,6 +2600,16 @@ class _InfoTab extends StatelessWidget {
       0,
       (sum, m) => sum + m.length,
     );
+    final rocEpochs = kRocByTickerByEpoch.values.expand((m) => m.keys);
+    final rocSinceYear = rocEpochs.isEmpty
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(
+            rocEpochs.reduce((a, b) => a < b ? a : b) * 1000,
+            isUtc: true,
+          ).year;
+    final priceSinceYear = kPriceEarliest.isEmpty
+        ? null
+        : int.tryParse(kPriceEarliest.split('-').first);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       child: Column(
@@ -2690,6 +2701,13 @@ class _InfoTab extends StatelessWidget {
               _RocStat(value: '$rocFunds', label: 'funds'),
               _RocStat(value: '$rocPoints', label: 'distributions'),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'ROC notices back to ${rocSinceYear ?? '—'}. Daily prices for '
+            '$kPriceFundCount funds (${_grouped('$kPriceCloseCount')} closes) '
+            'back to ${priceSinceYear ?? '—'}.',
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
           ),
           const SizedBox(height: 4),
           Text(

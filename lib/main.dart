@@ -2080,7 +2080,7 @@ class _LotsTab extends StatelessWidget {
           label: 'Total return after tax',
           sub: '${_money(r.totalCost)} → ${_money(afterTaxValue)} on your cost',
           value: _signedPct(r.totalReturnAfterTax),
-          valueColor: _signColor(r.totalReturnAfterTax),
+          valueColor: signColor(theme, r.totalReturnAfterTax),
           headline: true,
         ),
         const SizedBox(height: 8),
@@ -2181,19 +2181,27 @@ class _LotDetailCard extends StatelessWidget {
             ),
             kv('Principal (cost)', _money(l.cost)),
             kv('Distributions received', _money(l.distributions)),
-            kv('Income (taxable)', _signedMoney(l.incomeAmount), color: _gain),
-            kv('Tax this year', _signedMoney(-l.taxThisYear), color: _loss),
+            kv(
+              'Income (taxable)',
+              _signedMoney(l.incomeAmount),
+              color: gainColor(theme),
+            ),
+            kv(
+              'Tax this year',
+              _signedMoney(-l.taxThisYear),
+              color: lossColor(theme),
+            ),
             kv(l.isClosed ? 'Value at sale' : 'Value now', _money(l.nav)),
             kv(
               l.isClosed ? 'Realized G/L' : 'Unrealized G/L',
               _signedMoney(l.gl),
-              color: _signColor(l.gl),
+              color: signColor(theme, l.gl),
             ),
             const Divider(height: 18),
             kv(
               'Total return (after tax)',
               _signedPct(l.totalReturnAfterTax),
-              color: _signColor(l.totalReturnAfterTax),
+              color: signColor(theme, l.totalReturnAfterTax),
             ),
           ],
         ),
@@ -2328,7 +2336,7 @@ class _DiagnosticCard extends StatelessWidget {
             row(
               'Total return after tax',
               _signedPct(r.totalReturnAfterTax),
-              c: _signColor(r.totalReturnAfterTax),
+              c: signColor(theme, r.totalReturnAfterTax),
             ),
             row('Cost → value', '${_money(r.totalCost)} → ${_money(r.nav)}'),
             row(
@@ -2337,19 +2345,27 @@ class _DiagnosticCard extends StatelessWidget {
                   '${_grouped(r.dripShares.toStringAsFixed(2))}',
             ),
             row('Distributions received', _money(r.distributionsReceived)),
-            row('Income (taxable)', _signedMoney(r.incomeAmount), c: _gain),
+            row(
+              'Income (taxable)',
+              _signedMoney(r.incomeAmount),
+              c: gainColor(theme),
+            ),
             if (r.realizedGL != 0)
               row(
                 'Realized G/L',
                 _signedMoney(r.realizedGL),
-                c: _signColor(r.realizedGL),
+                c: signColor(theme, r.realizedGL),
               ),
             row(
               'Unrealized G/L',
               _signedMoney(r.unrealizedGL),
-              c: _signColor(r.unrealizedGL),
+              c: signColor(theme, r.unrealizedGL),
             ),
-            row('Tax this year', _signedMoney(-r.taxThisYear), c: _loss),
+            row(
+              'Tax this year',
+              _signedMoney(-r.taxThisYear),
+              c: lossColor(theme),
+            ),
             if (scenario.checks.isNotEmpty) ...[
               const Divider(height: 18),
               Text(
@@ -2372,7 +2388,7 @@ class _DiagnosticCard extends StatelessWidget {
   // dollars; small ones (shares, %) keep two decimals.
   Widget _checkRow(ThemeData theme, DiagCheck c) {
     String fmt(double v) => v.abs() >= 10 ? _money(v) : v.toStringAsFixed(2);
-    final color = c.ok ? _gain : _loss;
+    final color = c.ok ? gainColor(theme) : lossColor(theme);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1),
       child: Row(
@@ -2395,7 +2411,7 @@ class _DiagnosticCard extends StatelessWidget {
             c.ok ? fmt(c.actual) : '${fmt(c.actual)} ≠ ${fmt(c.expected)}',
             style: theme.textTheme.bodySmall?.copyWith(
               fontWeight: FontWeight.w600,
-              color: c.ok ? null : _loss,
+              color: c.ok ? null : lossColor(theme),
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
@@ -2413,10 +2429,11 @@ class _PassPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final bg = ok
-        ? _gain.withValues(alpha: 0.18)
-        : Theme.of(context).colorScheme.errorContainer;
-    final fg = ok ? _gain : Theme.of(context).colorScheme.onErrorContainer;
+        ? gainColor(theme).withValues(alpha: 0.18)
+        : theme.colorScheme.errorContainer;
+    final fg = ok ? gainColor(theme) : theme.colorScheme.onErrorContainer;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -2825,7 +2842,7 @@ class _ResultCard extends StatelessWidget {
                   ? '${_money(r.startPrice)} → ${_money(afterTaxValue)} on your start'
                   : '${_money(r.totalCost)} → ${_money(afterTaxValue)} on your cost',
               value: _signedPct(r.totalReturnAfterTax),
-              valueColor: _signColor(r.totalReturnAfterTax),
+              valueColor: signColor(theme, r.totalReturnAfterTax),
               headline: true,
             ),
             const SizedBox(height: 8),
@@ -2856,7 +2873,7 @@ class _ResultCard extends StatelessWidget {
                         '${(100 - r.rocPct).toStringAsFixed(0)}% (1−ROC)'
                   : 'taxable part of ${_money(r.distributionsReceived)} received',
               value: _signedMoney(r.incomeAmount),
-              valueColor: _gain,
+              valueColor: gainColor(theme),
               nested: true,
             ),
             if (r.realizedGL != 0)
@@ -2864,7 +2881,7 @@ class _ResultCard extends StatelessWidget {
                 label: 'Realized G/L',
                 sub: 'booked at sale · before capital-gains tax',
                 value: _signedMoney(r.realizedGL),
-                valueColor: _signColor(r.realizedGL),
+                valueColor: signColor(theme, r.realizedGL),
                 nested: true,
               ),
             if (r.unrealizedGL != 0 || r.realizedGL == 0)
@@ -2874,7 +2891,7 @@ class _ResultCard extends StatelessWidget {
                     ? 'paper gain on lots still held'
                     : '${_money(r.nav)} value − ${_money(r.costBasis)} basis',
                 value: _signedMoney(r.unrealizedGL),
-                valueColor: _signColor(r.unrealizedGL),
+                valueColor: signColor(theme, r.unrealizedGL),
                 nested: true,
               ),
             _StmtRow(
@@ -2885,7 +2902,7 @@ class _ResultCard extends StatelessWidget {
                   : '${(r.combinedRate * 100).toStringAsFixed(0)}% on the '
                         '${_money(r.incomeAmount)} income',
               value: _signedMoney(-r.taxThisYear),
-              valueColor: _loss,
+              valueColor: lossColor(theme),
               nested: true,
             ),
             const Divider(height: 28),
@@ -2927,12 +2944,13 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final isOk = qualifies;
     final bg = isOk
-        ? Colors.green.withValues(alpha: 0.18)
+        ? gainColor(theme).withValues(alpha: 0.18)
         : scheme.errorContainer;
-    final fg = isOk ? Colors.greenAccent.shade400 : scheme.onErrorContainer;
+    final fg = isOk ? gainColor(theme) : scheme.onErrorContainer;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -3095,7 +3113,7 @@ class _ReferenceGrid extends StatelessWidget {
           'Unrealized G/L',
           '—',
           _signedMoney(r.unrealizedGL),
-          endColor: _signColor(r.unrealizedGL),
+          endColor: signColor(theme, r.unrealizedGL),
         ),
       ],
     );
@@ -3147,7 +3165,7 @@ class _PortfolioGrid extends StatelessWidget {
         cell('${fmtShares(l.initialShares)}→${fmtShares(l.finalShares)}'),
         cell(_money(l.cost)),
         cell(_money(l.nav)),
-        cell(_signedMoney(l.gl), color: _signColor(l.gl)),
+        cell(_signedMoney(l.gl), color: signColor(theme, l.gl)),
       ],
     );
 
@@ -3189,7 +3207,7 @@ class _PortfolioGrid extends StatelessWidget {
             cell(_money(r.nav)),
             cell(
               _signedMoney(r.unrealizedGL + r.realizedGL),
-              color: _signColor(r.unrealizedGL + r.realizedGL),
+              color: signColor(theme, r.unrealizedGL + r.realizedGL),
             ),
           ],
         ),
@@ -3204,9 +3222,16 @@ const _months = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-final Color _gain = Colors.greenAccent.shade400;
-final Color _loss = Colors.redAccent.shade200;
-Color _signColor(double v) => v < 0 ? _loss : _gain;
+// Sign colors resolve against the active theme so gains/losses stay legible in
+// either brightness: dark keeps the original bright accents (no visual change),
+// light falls back to a contrast-safe green and the scheme's error red.
+Color gainColor(ThemeData t) => t.brightness == Brightness.dark
+    ? Colors.greenAccent.shade400
+    : const Color(0xFF1B7A3D);
+Color lossColor(ThemeData t) => t.brightness == Brightness.dark
+    ? Colors.redAccent.shade200
+    : t.colorScheme.error;
+Color signColor(ThemeData t, double v) => v < 0 ? lossColor(t) : gainColor(t);
 
 // Group the integer part with commas so large figures read at a glance
 // ("$1,250.00" not "$1250.00"). No intl dependency — a tiny manual grouper.
@@ -3360,7 +3385,7 @@ class _DistributionsTab extends StatelessWidget {
                 _StmtRow(
                   label: 'Tax this year',
                   value: _signedMoney(-taxThisYear),
-                  valueColor: _loss,
+                  valueColor: lossColor(theme),
                   nested: true,
                 ),
                 const SizedBox(height: 6),
@@ -3593,7 +3618,7 @@ class _PricesTab extends StatelessWidget {
                 _StmtRow(
                   label: '12-month change',
                   value: _signedPct(pctChange / 100),
-                  valueColor: _signColor(pctChange),
+                  valueColor: signColor(theme, pctChange),
                 ),
                 _StmtRow(
                   label: 'Average close',

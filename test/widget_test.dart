@@ -338,8 +338,8 @@ void main() {
       expect(find.text('Total distributions'), findsOneWidget);
       expect(find.text('Average per payout'), findsOneWidget);
       expect(find.textContaining('Return of capital'), findsOneWidget);
-      // Footer total = $1 + $2 = $3.0000.
-      expect(find.text('\$3.0000'), findsWidgets);
+      // Footer total = $1 + $2 = $3.00 (now formatted like the summary).
+      expect(find.text('\$3.00'), findsWidgets);
     });
 
     testWidgets('Prices tab lists closes and shows — for a null bar', (
@@ -367,7 +367,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Date'), findsOneWidget);
-      expect(find.text('Closing price'), findsOneWidget);
+      expect(find.text('Close'), findsOneWidget);
+      expect(find.text('Change'), findsOneWidget);
       expect(find.text('Current price'), findsOneWidget);
       expect(find.text('12-month change'), findsOneWidget);
       expect(find.text('Average close'), findsOneWidget);

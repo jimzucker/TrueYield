@@ -3250,6 +3250,8 @@ String _grouped(String fixed) {
 }
 
 String _money(double v) => '\$${_grouped(v.toStringAsFixed(2))}';
+// Per-share money needs 4 decimals (a $0.2611 payout mustn't collapse to $0.26).
+String _money4(double v) => '\$${_grouped(v.toStringAsFixed(4))}';
 String _signedMoney(double v) =>
     '${v < 0 ? '−' : '+'}\$${_grouped(v.abs().toStringAsFixed(2))}';
 String _signedPct(double v) =>
@@ -3408,7 +3410,7 @@ class _DistributionsTab extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Row(
               children: [
-                Expanded(flex: 4, child: Text('Date', style: headStyle)),
+                Expanded(flex: 5, child: Text('Date', style: headStyle)),
                 Expanded(
                   flex: 3,
                   child: Text(
@@ -3442,9 +3444,10 @@ class _DistributionsTab extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '\$${total.toStringAsFixed(4)}',
+                  _money(total),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ],
@@ -3453,17 +3456,45 @@ class _DistributionsTab extends StatelessWidget {
         }
         final d = r.distributions[i - 2];
         final epoch = d.date.toUtc().millisecondsSinceEpoch ~/ 1000;
+        final rocPct = rocOverrides[epoch] ?? defaultRoc;
+        final rocDollars = d.amount * rocPct / 100;
+        final num = theme.textTheme.bodyMedium?.copyWith(
+          fontFeatures: const [FontFeature.tabularFigures()],
+        );
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(flex: 4, child: Text(fmtDateHuman(d.date))),
+              Expanded(
+                flex: 5,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(fmtDateHuman(d.date), style: num),
+                    ),
+                    Text(
+                      'ROC ${_money4(rocDollars)} · taxable '
+                      '${_money4(d.amount - rocDollars)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Expanded(
                 flex: 3,
-                child: Text(
-                  '\$${d.amount.toStringAsFixed(4)}',
-                  textAlign: TextAlign.right,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    _money4(d.amount),
+                    textAlign: TextAlign.right,
+                    style: num,
+                  ),
                 ),
               ),
               Expanded(
@@ -3482,9 +3513,10 @@ class _DistributionsTab extends StatelessWidget {
   }
 }
 
-// One editable ROC-% cell for a distribution row. Shows the override if set,
-// otherwise the default as a hint. Commits on submit/focus-loss; an empty value
-// clears the override (reverts to the default).
+// One tap-to-edit ROC-% cell for a distribution row. Renders as plain right-
+// aligned text (an override stands out in the primary color; the inherited
+// default is muted) and only becomes a text field while being edited. Commits
+// on submit/focus-loss; an empty value clears the override (reverts to default).
 class _RocCell extends StatefulWidget {
   final double? overrideRoc;
   final double defaultRoc;
@@ -3502,6 +3534,7 @@ class _RocCell extends StatefulWidget {
 class _RocCellState extends State<_RocCell> {
   late final TextEditingController _ctrl;
   late final FocusNode _focus;
+  bool _editing = false;
 
   @override
   void initState() {
@@ -3513,7 +3546,16 @@ class _RocCellState extends State<_RocCell> {
   }
 
   void _onFocusChange() {
-    if (!_focus.hasFocus) _commit();
+    if (!_focus.hasFocus && _editing) {
+      _commit();
+      setState(() => _editing = false);
+    }
+  }
+
+  void _startEditing() {
+    _ctrl.text = widget.overrideRoc == null ? '' : fmtNum(widget.overrideRoc!);
+    setState(() => _editing = true);
+    _focus.requestFocus();
   }
 
   void _commit() {
@@ -3536,20 +3578,55 @@ class _RocCellState extends State<_RocCell> {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: _ctrl,
-      focusNode: _focus,
-      textAlign: TextAlign.right,
-      style: const TextStyle(fontSize: 14),
-      decoration: InputDecoration(
-        isDense: true,
-        hintText: fmtNum(widget.defaultRoc),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        border: const OutlineInputBorder(),
-        suffixText: '%',
+    final theme = Theme.of(context);
+    if (_editing) {
+      return TextField(
+        controller: _ctrl,
+        focusNode: _focus,
+        autofocus: true,
+        textAlign: TextAlign.right,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+        decoration: const InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          border: OutlineInputBorder(),
+          suffixText: '%',
+        ),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        onSubmitted: (_) {
+          _commit();
+          setState(() => _editing = false);
+        },
+      );
+    }
+    final hasOverride = widget.overrideRoc != null;
+    final shown = hasOverride
+        ? fmtNum(widget.overrideRoc!)
+        : fmtNum(widget.defaultRoc);
+    return InkWell(
+      onTap: _startEditing,
+      borderRadius: BorderRadius.circular(6),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            '$shown%',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: hasOverride
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight: hasOverride ? FontWeight.w700 : FontWeight.w400,
+              decoration: TextDecoration.underline,
+              decorationStyle: TextDecorationStyle.dotted,
+              decorationColor: theme.colorScheme.outline,
+            ),
+          ),
+        ),
       ),
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      onSubmitted: (_) => _commit(),
     );
   }
 }
@@ -3635,35 +3712,63 @@ class _PricesTab extends StatelessWidget {
           );
         }
         if (i == 1) {
+          final head = theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurfaceVariant,
+          );
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Date',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
+                Expanded(flex: 5, child: Text('Date', style: head)),
+                Expanded(
+                  flex: 4,
+                  child: Text(
+                    'Change',
+                    textAlign: TextAlign.right,
+                    style: head,
                   ),
                 ),
-                Text(
-                  'Closing price',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                Expanded(
+                  flex: 4,
+                  child: Text('Close', textAlign: TextAlign.right, style: head),
                 ),
               ],
             ),
           );
         }
         final c = closes[i - 2];
+        // closes is newest-first, so closes[i-1] is the prior trading day.
+        final prior = (i - 1) < closes.length ? closes[i - 1].close : null;
+        final delta = (c.close != null && prior != null)
+            ? c.close! - prior
+            : null;
+        final num = theme.textTheme.bodyMedium?.copyWith(
+          fontFeatures: const [FontFeature.tabularFigures()],
+        );
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(fmtDateHuman(c.date)),
-              Text(c.close == null ? '—' : '\$${c.close!.toStringAsFixed(2)}'),
+              Expanded(flex: 5, child: Text(fmtDateHuman(c.date), style: num)),
+              Expanded(
+                flex: 4,
+                child: Text(
+                  delta == null ? '' : _signedMoney(delta),
+                  textAlign: TextAlign.right,
+                  style: num?.copyWith(
+                    color: delta == null ? null : signColor(theme, delta),
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 4,
+                child: Text(
+                  c.close == null ? '—' : _money(c.close!),
+                  textAlign: TextAlign.right,
+                  style: num,
+                ),
+              ),
             ],
           ),
         );

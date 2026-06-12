@@ -3474,10 +3474,10 @@ class _PortfolioGrid extends StatelessWidget {
               : _monthLabel(l.buyDate),
           italic: l.isClosed,
         ),
-        numCell('${fmtShares(l.initialShares)}→${fmtShares(l.finalShares)}'),
-        numCell(_money(l.cost)),
-        numCell(_money(l.nav)),
-        numCell(_signedMoney(l.gl), color: signColor(theme, l.gl)),
+        numCell('${fmtShares1(l.initialShares)}→${fmtShares1(l.finalShares)}'),
+        numCell(_money0(l.cost)),
+        numCell(_money0(l.nav)),
+        numCell(_signedMoney0(l.gl), color: signColor(theme, l.gl)),
       ],
     );
 
@@ -3507,13 +3507,13 @@ class _PortfolioGrid extends StatelessWidget {
           children: [
             labelCell('Total', bold: true),
             numCell(
-              '${fmtShares(r.totalInitialShares)}→${fmtShares(r.totalFinalShares)}',
+              '${fmtShares1(r.totalInitialShares)}→${fmtShares1(r.totalFinalShares)}',
               bold: true,
             ),
-            numCell(_money(r.totalCost), bold: true),
-            numCell(_money(r.nav), bold: true),
+            numCell(_money0(r.totalCost), bold: true),
+            numCell(_money0(r.nav), bold: true),
             numCell(
-              _signedMoney(r.unrealizedGL + r.realizedGL),
+              _signedMoney0(r.unrealizedGL + r.realizedGL),
               color: signColor(theme, r.unrealizedGL + r.realizedGL),
               bold: true,
             ),
@@ -3560,6 +3560,13 @@ String _grouped(String fixed) {
 String _money(double v) => '\$${_grouped(v.toStringAsFixed(2))}';
 // Per-share money needs 4 decimals (a $0.2611 payout mustn't collapse to $0.26).
 String _money4(double v) => '\$${_grouped(v.toStringAsFixed(4))}';
+// Whole-dollar money / signed money — used in the dense portfolio grid where
+// pennies just cost space.
+String _money0(double v) => '\$${_grouped(v.toStringAsFixed(0))}';
+String _signedMoney0(double v) =>
+    '${v < 0 ? '−' : '+'}\$${_grouped(v.abs().toStringAsFixed(0))}';
+// Share count to 1 decimal, comma-grouped.
+String fmtShares1(double v) => _grouped(v.toStringAsFixed(1));
 String _signedMoney(double v) =>
     '${v < 0 ? '−' : '+'}\$${_grouped(v.abs().toStringAsFixed(2))}';
 String _signedPct(double v) =>

@@ -313,6 +313,24 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   // null when no explicit lots → compute() uses the single default lot.
   List<Lot>? _activeLots() => _lots.isEmpty ? null : _lots;
 
+  // Tickers the user has saved data for (lots and/or ROC overrides), plus the
+  // current field — sorted, for the recent-ticker pick list.
+  List<String> _storedTickers() {
+    final set = <String>{..._lotsByTicker.keys, ..._rocByTicker.keys};
+    final cur = _tickerCtrl.text.trim().toUpperCase();
+    if (cur.isNotEmpty) set.add(cur);
+    final list = set.where((t) => t.isNotEmpty).toList()..sort();
+    return list;
+  }
+
+  // Pick a stored ticker: drop it in the field (its lots load via the listeners)
+  // and run the calculation so the result shows immediately.
+  void _pickStoredTicker(String t) {
+    _tickerCtrl.text = t;
+    _syncLotsForTicker();
+    _calculate();
+  }
+
   // Closing price on [date] from the last fetch, but only when it's for the
   // ticker currently in the field (so we never apply a stale fund's price).
   // null when we have no matching data yet — the cost is then derived from the
@@ -646,12 +664,50 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       border: OutlineInputBorder(),
       contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
     );
+    final theme = Theme.of(context);
+    final stored = _storedTickers();
     return SingleChildScrollView(
       controller: _scrollCtrl,
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ─── Taxes first: one global set, applied to every ticker (not
+          //     stored per ticker). Income-tax rates + the long-term capital-
+          //     gains rate in a 2×2. ST gains use Fed+State+Local; LT gains use
+          //     LT%+State+Local (see YieldMath.compute).
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8, left: 2),
+            child: Text(
+              'Tax rates — applied to every ticker',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _rateField(_federalCtrl, 'Federal %', fieldDecoration),
+              const SizedBox(width: 10),
+              _rateField(_stateCtrl, 'State %', fieldDecoration),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _rateField(_localCtrl, 'Local %', fieldDecoration),
+              const SizedBox(width: 10),
+              _rateField(_ltGainsCtrl, 'LT gains %', fieldDecoration),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: Divider(height: 1),
+          ),
+          // ─── Per-ticker: the symbol and its return-of-capital assumption.
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -664,12 +720,26 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    color: theme.colorScheme.onPrimaryContainer,
                   ),
                   decoration: fieldDecoration.copyWith(
                     labelText: 'Ticker',
                     filled: true,
-                    fillColor: Theme.of(context).colorScheme.primaryContainer,
+                    fillColor: theme.colorScheme.primaryContainer,
+                    suffixIcon: stored.isEmpty
+                        ? null
+                        : PopupMenuButton<String>(
+                            icon: Icon(
+                              Icons.history,
+                              color: theme.colorScheme.onPrimaryContainer,
+                            ),
+                            tooltip: 'Saved tickers',
+                            onSelected: _pickStoredTicker,
+                            itemBuilder: (_) => [
+                              for (final t in stored)
+                                PopupMenuItem(value: t, child: Text(t)),
+                            ],
+                          ),
                   ),
                   textCapitalization: TextCapitalization.characters,
                   autocorrect: false,
@@ -703,27 +773,6 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
             ],
           ),
           _buildRocSourceCaption(context),
-          const SizedBox(height: 14),
-          // Income-tax rates and the long-term capital-gains rate, in a 2×2 so
-          // all four sit together. Short-term gains use Fed+State+Local; LT
-          // gains use LT%+State+Local (see YieldMath.compute).
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _rateField(_federalCtrl, 'Federal %', fieldDecoration),
-              const SizedBox(width: 10),
-              _rateField(_stateCtrl, 'State %', fieldDecoration),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _rateField(_localCtrl, 'Local %', fieldDecoration),
-              const SizedBox(width: 10),
-              _rateField(_ltGainsCtrl, 'LT gains %', fieldDecoration),
-            ],
-          ),
           const SizedBox(height: 16),
           _buildLotsSection(context),
           const SizedBox(height: 16),

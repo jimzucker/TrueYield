@@ -714,5 +714,37 @@ void main() {
       await tester.pump();
       expect(find.text('Total return after tax'), findsNothing);
     });
+
+    testWidgets('a saved ticker is offered in the pick list and recalculates', (
+      tester,
+    ) async {
+      // A ticker with a saved lot → it should appear in the recent-ticker menu.
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'lots_by_ticker': '{"NVDY":[{"buyDate":1735689600000,"shares":10}]}',
+      });
+      final client = MockClient(
+        (req) async => http.Response(
+          yahooChartJson(
+            price: 80,
+            months: [DateTime.utc(2025, 6), DateTime.utc(2026, 6)],
+            closes: [100, 80],
+            dividends: {DateTime.utc(2025, 12, 15): 5.0},
+          ),
+          200,
+        ),
+      );
+      await pumpScreen(tester, client);
+
+      // The saved-tickers button is shown; opening it lists the stored ticker.
+      expect(find.byIcon(Icons.history), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.history));
+      await tester.pumpAndSettle();
+      expect(find.text('NVDY'), findsWidgets);
+
+      // Picking it fills the field and runs the calculation.
+      await tester.tap(find.text('NVDY').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Total return after tax'), findsOneWidget);
+    });
   });
 }

@@ -185,6 +185,14 @@ class LotResult {
 
   bool get isClosed => sellDate != null;
 
+  // Total return on this lot's cost, before and after this year's income tax.
+  double get totalReturnBeforeTax => cost > 0 ? (nav - cost) / cost : 0.0;
+  double get totalReturnAfterTax =>
+      cost > 0 ? (nav - taxThisYear - cost) / cost : 0.0;
+  // DRIP share growth on this lot (finalShares ÷ initialShares − 1).
+  double get sharesGrowth =>
+      initialShares > 0 ? finalShares / initialShares - 1 : 0.0;
+
   const LotResult({
     required this.buyDate,
     required this.initialShares,
@@ -261,6 +269,11 @@ class YieldResult {
   // "1 share a year ago" hypothetical, so the UI shows the per-share TTM
   // statement + reference grid. With real lots it shows a by-lot portfolio view.
   final bool isDefaultLot;
+
+  // Portfolio share totals across all lots (the widgets used to fold these).
+  double get totalInitialShares =>
+      lots.fold(0.0, (s, l) => s + l.initialShares);
+  double get totalFinalShares => lots.fold(0.0, (s, l) => s + l.finalShares);
 
   final List<DistributionEntry> distributions;
   final List<PriceBar> priceBars;
@@ -973,12 +986,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       return;
     }
     _rocSourceTicker = tkr;
-    _rocCtrl.text = _fmtRoc(roc);
+    _rocCtrl.text = fmtNum(roc);
   }
-
-  // Trim a trailing ".0" so "71.0" shows as "71" but "70.1" stays.
-  static String _fmtRoc(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
 
   // If the app is resumed on a later calendar day, the shown result's TTM
   // window has shifted, so silently re-run against the same inputs to refresh.
@@ -1131,21 +1140,29 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   // Re-run the pure math on the already-fetched bars/distributions with the
   // current lots, tax rates, and ROC overrides — no network. Caller wraps this
   // in setState. No-op until a qualifying result exists.
+  // Parse the tax/ROC fields. Non-numeric entries return null (so [_calculate]
+  // can validate); empty Local/ROC count as 0.
+  ({double? fed, double? state, double? local, double? roc}) _parseRates() {
+    final localText = _localCtrl.text.trim();
+    final rocText = _rocCtrl.text.trim();
+    return (
+      fed: double.tryParse(_federalCtrl.text.trim()),
+      state: double.tryParse(_stateCtrl.text.trim()),
+      local: double.tryParse(localText.isEmpty ? '0' : localText),
+      roc: double.tryParse(rocText.isEmpty ? '0' : rocText),
+    );
+  }
+
   void _recomputeInPlace() {
     final r = _result;
     if (r == null || !r.qualifies) return;
-    final fed = double.tryParse(_federalCtrl.text.trim()) ?? 0;
-    final state = double.tryParse(_stateCtrl.text.trim()) ?? 0;
-    final localText = _localCtrl.text.trim();
-    final local = double.tryParse(localText.isEmpty ? '0' : localText) ?? 0;
-    final rocText = _rocCtrl.text.trim();
-    final roc = double.tryParse(rocText.isEmpty ? '0' : rocText) ?? 0;
+    final (:fed, :state, :local, :roc) = _parseRates();
     _result = YieldMath.compute(
       ticker: r.ticker,
       currentPrice: r.currentPrice,
-      federalPct: fed,
-      statePct: state,
-      localPct: local,
+      federalPct: fed ?? 0,
+      statePct: state ?? 0,
+      localPct: local ?? 0,
       distributions: [
         for (final d in r.distributions)
           DistributionEntry(
@@ -1155,7 +1172,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
           ),
       ],
       priceBars: r.priceBars,
-      rocPct: roc,
+      rocPct: roc ?? 0,
       lots: _activeLots(),
     );
   }
@@ -1169,12 +1186,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       setState(() => _error = 'Enter a ticker.');
       return;
     }
-    final fed = double.tryParse(_federalCtrl.text.trim());
-    final state = double.tryParse(_stateCtrl.text.trim());
-    final localText = _localCtrl.text.trim();
-    final local = double.tryParse(localText.isEmpty ? '0' : localText);
-    final rocText = _rocCtrl.text.trim();
-    final roc = double.tryParse(rocText.isEmpty ? '0' : rocText);
+    final (:fed, :state, :local, :roc) = _parseRates();
     if (fed == null || state == null || local == null) {
       setState(() => _error = 'Tax rates must be numeric (e.g. 32 for 32%).');
       return;
@@ -1495,19 +1507,19 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       child: matches
           ? Text(
               'ROC auto-filled from $tkr’s 19a-1 notices '
-              '(${_fmtRoc(roc)}%, as of $kRocDataAsOf).',
+              '(${fmtNum(roc)}%, as of $kRocDataAsOf).',
               style: muted,
             )
           : InkWell(
               onTap: () {
                 _rocSourceTicker = tkr;
-                _rocCtrl.text = _fmtRoc(roc);
+                _rocCtrl.text = fmtNum(roc);
               },
               child: Text.rich(
                 TextSpan(
                   style: muted,
                   children: [
-                    TextSpan(text: '$tkr’s 19a-1 ROC is ${_fmtRoc(roc)}% — '),
+                    TextSpan(text: '$tkr’s 19a-1 ROC is ${fmtNum(roc)}% — '),
                     TextSpan(
                       text: 'reset',
                       style: TextStyle(
@@ -1622,8 +1634,8 @@ class _LotRowState extends State<_LotRow> {
   @override
   void initState() {
     super.initState();
-    _sharesCtrl = TextEditingController(text: _fmt(widget.lot.shares));
-    _costCtrl = TextEditingController(text: _fmt(widget.lot.cost));
+    _sharesCtrl = TextEditingController(text: fmtNum(widget.lot.shares));
+    _costCtrl = TextEditingController(text: fmtNum(widget.lot.cost));
     _sharesFocus = FocusNode();
     _costFocus = FocusNode();
   }
@@ -1635,19 +1647,14 @@ class _LotRowState extends State<_LotRow> {
   void didUpdateWidget(_LotRow old) {
     super.didUpdateWidget(old);
     if (!_sharesFocus.hasFocus && widget.lot.shares != old.lot.shares) {
-      final t = _fmt(widget.lot.shares);
+      final t = fmtNum(widget.lot.shares);
       if (_sharesCtrl.text != t) _sharesCtrl.text = t;
     }
     if (!_costFocus.hasFocus && widget.lot.cost != old.lot.cost) {
-      final t = _fmt(widget.lot.cost);
+      final t = fmtNum(widget.lot.cost);
       if (_costCtrl.text != t) _costCtrl.text = t;
     }
   }
-
-  // Trim a trailing ".0" so "100.0" shows as "100" but "12.5" stays; null → "".
-  static String _fmt(double? v) => v == null
-      ? ''
-      : (v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString());
 
   @override
   void dispose() {
@@ -1700,9 +1707,7 @@ class _LotRowState extends State<_LotRow> {
     final shares = widget.lot.shares;
     if (close != null && shares != null) {
       final cost = (shares * close * 100).roundToDouble() / 100;
-      _costCtrl.text = cost == cost.roundToDouble()
-          ? cost.toStringAsFixed(0)
-          : cost.toStringAsFixed(2);
+      _costCtrl.text = fmtMoneyField(cost);
       _emit(buyDate: buyDate, cost: cost, costSet: true);
     } else {
       _emit(buyDate: buyDate);
@@ -1898,7 +1903,7 @@ class _DiagnosticCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final r = scenario.result;
-    final initial = r.lots.fold<double>(0, (s, l) => s + l.initialShares);
+    final initial = r.totalInitialShares;
     final tag = r.isDefaultLot
         ? 'Default'
         : '${r.lots.length} lot${r.lots.length == 1 ? '' : 's'}';
@@ -2357,10 +2362,6 @@ class _ResultCard extends StatelessWidget {
     // No lots entered → the original "1 share a year ago" per-share/TTM view.
     // With real lots → a by-lot, dollar-denominated portfolio view.
     final defaultView = r.isDefaultLot;
-    final totalInitialShares = r.lots.fold<double>(
-      0,
-      (s, l) => s + l.initialShares,
-    );
     final lotCount = r.lots.length;
     return Card(
       margin: EdgeInsets.zero,
@@ -2411,10 +2412,10 @@ class _ResultCard extends StatelessWidget {
               child: Text(
                 defaultView
                     ? 'DRIP grew your shares 1.00 → '
-                          '${r.dripShares.toStringAsFixed(2)} '
+                          '${fmtShares(r.dripShares)} '
                           '(+${(r.compoundedGrossYield * 100).toStringAsFixed(0)}%)'
-                    : 'DRIP grew your shares ${totalInitialShares.toStringAsFixed(2)} → '
-                          '${r.dripShares.toStringAsFixed(2)} '
+                    : 'DRIP grew your shares ${fmtShares(r.totalInitialShares)} → '
+                          '${fmtShares(r.dripShares)} '
                           'across $lotCount ${lotCount == 1 ? 'lot' : 'lots'} '
                           '(+${(r.compoundedGrossYield * 100).toStringAsFixed(0)}%)',
                 style: theme.textTheme.bodyMedium?.copyWith(
@@ -2703,9 +2704,6 @@ class _PortfolioGrid extends StatelessWidget {
       ),
     );
 
-    final totalInitial = r.lots.fold<double>(0, (s, l) => s + l.initialShares);
-    final totalFinal = r.lots.fold<double>(0, (s, l) => s + l.finalShares);
-
     // Closed lots show "buy→sell" months; open lots just the buy month.
     TableRow lotRow(LotResult l) => TableRow(
       children: [
@@ -2720,9 +2718,7 @@ class _PortfolioGrid extends StatelessWidget {
             ),
           ),
         ),
-        cell(
-          '${l.initialShares.toStringAsFixed(2)}→${l.finalShares.toStringAsFixed(2)}',
-        ),
+        cell('${fmtShares(l.initialShares)}→${fmtShares(l.finalShares)}'),
         cell(_money(l.cost)),
         cell(_money(l.nav)),
         cell(_signedMoney(l.gl), color: _signColor(l.gl)),
@@ -2761,7 +2757,7 @@ class _PortfolioGrid extends StatelessWidget {
               ),
             ),
             cell(
-              '${totalInitial.toStringAsFixed(2)}→${totalFinal.toStringAsFixed(2)}',
+              '${fmtShares(r.totalInitialShares)}→${fmtShares(r.totalFinalShares)}',
             ),
             cell(_money(r.totalCost)),
             cell(_money(r.nav)),
@@ -2808,6 +2804,19 @@ String _signedMoney(double v) =>
 String _signedPct(double v) =>
     '${v < 0 ? '−' : '+'}${(v.abs() * 100).toStringAsFixed(1)}%';
 String _pctPlain(double v) => '${(v * 100).toStringAsFixed(1)}%';
+
+// Trim a trailing ".0" so 100.0 → "100" but 12.5 → "12.5"; null → "". Used for
+// editable numeric fields (shares, ROC %) where extra decimals look noisy.
+String fmtNum(double? v) => v == null
+    ? ''
+    : (v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString());
+
+// A money value for a field: whole → no decimals, else 2 (e.g. an auto-filled cost).
+String fmtMoneyField(double v) =>
+    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
+// Share count for display: 2 decimals, comma-grouped (e.g. "1,234.56").
+String fmtShares(double v) => _grouped(v.toStringAsFixed(2));
 
 // "Jan '25" — compact month label for the reference grid columns.
 String _monthLabel(DateTime d) =>
@@ -3043,14 +3052,11 @@ class _RocCellState extends State<_RocCell> {
   late final TextEditingController _ctrl;
   late final FocusNode _focus;
 
-  static String _fmt(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
-
   @override
   void initState() {
     super.initState();
     _ctrl = TextEditingController(
-      text: widget.overrideRoc == null ? '' : _fmt(widget.overrideRoc!),
+      text: widget.overrideRoc == null ? '' : fmtNum(widget.overrideRoc!),
     );
     _focus = FocusNode()..addListener(_onFocusChange);
   }
@@ -3086,7 +3092,7 @@ class _RocCellState extends State<_RocCell> {
       style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         isDense: true,
-        hintText: _fmt(widget.defaultRoc),
+        hintText: fmtNum(widget.defaultRoc),
         contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         border: const OutlineInputBorder(),
         suffixText: '%',

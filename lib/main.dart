@@ -912,6 +912,7 @@ class YieldScreen extends StatefulWidget {
 
 class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   final _tickerCtrl = TextEditingController();
+  final _tickerFocus = FocusNode();
   final _federalCtrl = TextEditingController();
   final _stateCtrl = TextEditingController();
   final _localCtrl = TextEditingController(text: '0');
@@ -925,12 +926,19 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   // and the stale-on-a-new-day check; null whenever no result is displayed.
   DateTime? _resultFetchedAt;
 
-  // Purchases the user entered. Empty = the single default lot (1 share, ~1 year
-  // ago), preserving the original behavior with zero migration for old users.
+  // Purchases for the CURRENT ticker. Empty = the single default lot (1 share,
+  // ~1 year ago), preserving the original behavior. Lots are saved per ticker
+  // (see _lotsByTicker) and swapped when the ticker changes.
   List<Lot> _lots = [];
-  // Per-distribution ROC % overrides keyed by the Yahoo dividend epoch (seconds).
-  // Set from the Distributions tab; survives re-fetch because the key is stable.
+  // Per-distribution ROC % overrides for the current ticker, keyed by the Yahoo
+  // dividend epoch (seconds). Survives re-fetch because the key is stable.
   Map<int, double> _rocOverrides = {};
+
+  // Saved lots / ROC overrides per ticker, so each fund keeps its own positions.
+  // _lotsTicker is the ticker _lots/_rocOverrides currently belong to.
+  Map<String, List<Lot>> _lotsByTicker = {};
+  Map<String, Map<int, double>> _rocByTicker = {};
+  String _lotsTicker = '';
 
   // The ticker whose bundled ROC we last auto-filled into the ROC field, so we
   // only re-apply when the ticker actually changes to a different known fund.
@@ -946,8 +954,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   static const _kState = 'rate_state';
   static const _kLocal = 'rate_local';
   static const _kRoc = 'rate_roc';
-  static const _kLots = 'lots';
-  static const _kRocOverrides = 'roc_overrides';
+  static const _kLotsByTicker = 'lots_by_ticker';
+  static const _kRocByTicker = 'roc_overrides_by_ticker';
 
   @override
   void initState() {
@@ -969,6 +977,11 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     _tickerCtrl.addListener(_maybeAutofillRoc);
     _tickerCtrl.addListener(_rebuildForCaption);
     _rocCtrl.addListener(_rebuildForCaption);
+    // When the ticker field loses focus, load that ticker's saved lots (or
+    // clear to the default), keeping each fund's positions separate.
+    _tickerFocus.addListener(() {
+      if (!_tickerFocus.hasFocus) _syncLotsForTicker();
+    });
   }
 
   void _rebuildForCaption() {
@@ -1018,41 +1031,88 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   Future<void> _loadSavedInputs() async {
     final prefs = await SharedPreferences.getInstance();
     // Corrupt JSON must never crash boot — fall back to the defaults.
-    List<Lot> lots = [];
-    Map<int, double> overrides = {};
+    Map<String, List<Lot>> lotsByTicker = {};
+    Map<String, Map<int, double>> rocByTicker = {};
     try {
-      final raw = prefs.getString(_kLots);
+      final raw = prefs.getString(_kLotsByTicker);
       if (raw != null) {
-        lots = [
-          for (final e in json.decode(raw) as List)
-            Lot.fromJson(e as Map<String, dynamic>),
-        ];
-      }
-    } catch (_) {
-      lots = [];
-    }
-    try {
-      final raw = prefs.getString(_kRocOverrides);
-      if (raw != null) {
-        overrides = (json.decode(raw) as Map<String, dynamic>).map(
-          (k, v) => MapEntry(int.parse(k), (v as num).toDouble()),
+        lotsByTicker = (json.decode(raw) as Map<String, dynamic>).map(
+          (t, v) => MapEntry(t, [
+            for (final e in v as List) Lot.fromJson(e as Map<String, dynamic>),
+          ]),
         );
       }
     } catch (_) {
-      overrides = {};
+      lotsByTicker = {};
     }
+    try {
+      final raw = prefs.getString(_kRocByTicker);
+      if (raw != null) {
+        rocByTicker = (json.decode(raw) as Map<String, dynamic>).map(
+          (t, v) => MapEntry(
+            t,
+            (v as Map<String, dynamic>).map(
+              (k, pct) => MapEntry(int.parse(k), (pct as num).toDouble()),
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      rocByTicker = {};
+    }
+    final ticker = (prefs.getString(_kTicker) ?? '').trim().toUpperCase();
     setState(() {
       _tickerCtrl.text = prefs.getString(_kTicker) ?? '';
       _federalCtrl.text = prefs.getString(_kFederal) ?? '';
       _stateCtrl.text = prefs.getString(_kState) ?? '';
       _localCtrl.text = prefs.getString(_kLocal) ?? '0';
       _rocCtrl.text = prefs.getString(_kRoc) ?? '71';
-      _lots = lots;
-      _rocOverrides = overrides;
+      _lotsByTicker = lotsByTicker;
+      _rocByTicker = rocByTicker;
+      _lotsTicker = ticker;
+      _lots = List.of(lotsByTicker[ticker] ?? const <Lot>[]);
+      _rocOverrides = Map.of(rocByTicker[ticker] ?? const <int, double>{});
     });
   }
 
+  // Fold the current ticker's in-memory lots / ROC overrides into the per-ticker
+  // maps (dropping the entry when empty) so they persist and survive a swap.
+  void _flushLotsToMap() {
+    final t = _lotsTicker.isNotEmpty
+        ? _lotsTicker
+        : _tickerCtrl.text.trim().toUpperCase();
+    if (t.isEmpty) return;
+    if (_lots.isEmpty) {
+      _lotsByTicker.remove(t);
+    } else {
+      _lotsByTicker[t] = List.of(_lots);
+    }
+    if (_rocOverrides.isEmpty) {
+      _rocByTicker.remove(t);
+    } else {
+      _rocByTicker[t] = Map.of(_rocOverrides);
+    }
+  }
+
+  // Load the entered ticker's saved lots (or clear to the default) when the
+  // ticker changes — each fund keeps its own positions.
+  void _syncLotsForTicker() {
+    final t = _tickerCtrl.text.trim().toUpperCase();
+    if (t == _lotsTicker) return;
+    _flushLotsToMap(); // saves under the old ticker
+    setState(() {
+      _lots = List.of(_lotsByTicker[t] ?? const <Lot>[]);
+      _rocOverrides = Map.of(_rocByTicker[t] ?? const <int, double>{});
+      _lotsTicker = t;
+      _result = null;
+      _error = null;
+      _resultFetchedAt = null;
+    });
+    _saveInputs();
+  }
+
   Future<void> _saveInputs() async {
+    _flushLotsToMap();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kTicker, _tickerCtrl.text.trim().toUpperCase());
     await prefs.setString(_kFederal, _federalCtrl.text);
@@ -1060,12 +1120,20 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     await prefs.setString(_kLocal, _localCtrl.text);
     await prefs.setString(_kRoc, _rocCtrl.text);
     await prefs.setString(
-      _kLots,
-      json.encode([for (final l in _lots) l.toJson()]),
+      _kLotsByTicker,
+      json.encode(
+        _lotsByTicker.map(
+          (t, ls) => MapEntry(t, [for (final l in ls) l.toJson()]),
+        ),
+      ),
     );
     await prefs.setString(
-      _kRocOverrides,
-      json.encode(_rocOverrides.map((k, v) => MapEntry(k.toString(), v))),
+      _kRocByTicker,
+      json.encode(
+        _rocByTicker.map(
+          (t, m) => MapEntry(t, m.map((k, v) => MapEntry(k.toString(), v))),
+        ),
+      ),
     );
   }
 
@@ -1073,6 +1141,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tickerCtrl.dispose();
+    _tickerFocus.dispose();
     _federalCtrl.dispose();
     _stateCtrl.dispose();
     _localCtrl.dispose();
@@ -1179,6 +1248,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     // Dismiss the keyboard the moment the user commits — otherwise it
     // covers the result card on smaller phones.
     FocusManager.instance.primaryFocus?.unfocus();
+    // Make sure _lots match the entered ticker before we compute.
+    _syncLotsForTicker();
     final ticker = _tickerCtrl.text.trim().toUpperCase();
     if (ticker.isEmpty) {
       setState(() => _error = 'Enter a ticker.');
@@ -1366,6 +1437,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                 flex: 2,
                 child: TextField(
                   controller: _tickerCtrl,
+                  focusNode: _tickerFocus,
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,

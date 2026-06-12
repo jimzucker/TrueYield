@@ -1516,7 +1516,11 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                 flex: 3,
                 child: TextField(
                   controller: _rocCtrl,
-                  style: const TextStyle(fontSize: 18),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
                   decoration: fieldDecoration.copyWith(
                     labelText: 'Return of capital %',
                   ),
@@ -1536,7 +1540,11 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
               Expanded(
                 child: TextField(
                   controller: _federalCtrl,
-                  style: const TextStyle(fontSize: 18),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
                   decoration: fieldDecoration.copyWith(labelText: 'Federal %'),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -1548,7 +1556,11 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
               Expanded(
                 child: TextField(
                   controller: _stateCtrl,
-                  style: const TextStyle(fontSize: 18),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
                   decoration: fieldDecoration.copyWith(labelText: 'State %'),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -1560,7 +1572,11 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
               Expanded(
                 child: TextField(
                   controller: _localCtrl,
-                  style: const TextStyle(fontSize: 18),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
                   decoration: fieldDecoration.copyWith(labelText: 'Local %'),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -1757,7 +1773,7 @@ class _LotRowState extends State<_LotRow> {
 
   // The price to show in the field: the entered price, else the buy-date close.
   String get _priceFieldText => widget.lot.price != null
-      ? fmtNum(widget.lot.price)
+      ? fmtMoneyField(widget.lot.price!)
       : (widget.defaultPrice != null
             ? fmtMoneyField(widget.defaultPrice!)
             : '');
@@ -1888,7 +1904,11 @@ class _LotRowState extends State<_LotRow> {
     return TextField(
       controller: ctrl,
       focusNode: focus,
-      style: const TextStyle(fontSize: 14),
+      textAlign: TextAlign.right,
+      style: const TextStyle(
+        fontSize: 14,
+        fontFeatures: [FontFeature.tabularFigures()],
+      ),
       decoration: InputDecoration(
         isDense: true,
         labelText: label,

@@ -299,7 +299,7 @@ void main() {
       // status chip only appears on the non-qualifying card.)
       expect(find.text('Total return after tax'), findsOneWidget);
       expect(find.text('Income (taxable)'), findsOneWidget);
-      expect(find.text('Tax this year'), findsOneWidget);
+      expect(find.text('Income tax'), findsOneWidget);
       expect(find.text('After-tax yield'), findsOneWidget);
       expect(find.text('Advertised yield'), findsWidgets);
       expect(find.textContaining('TTM distributions'), findsWidgets);

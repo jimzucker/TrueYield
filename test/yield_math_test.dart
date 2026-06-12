@@ -346,7 +346,7 @@ void main() {
             '${signed(r.unrealizedGL).padLeft(12)}',
           )
           ..writeln(
-            '${'  Tax this year'.padRight(34)}'
+            '${'  Income tax'.padRight(34)}'
             '${signed(-r.taxThisYear).padLeft(12)}',
           )
           ..writeln(
@@ -789,6 +789,112 @@ void main() {
       expect(r.totalReturnBeforeTax, closeTo((r.nav - 1000) / 1000, _eps));
     });
 
+    // Capital-gains tax on realized gains. To isolate the gains math from DRIP,
+    // every lot's only distribution is dated before its buy date (so it's
+    // skipped → income 0, basis = cost). Rates: combined 35% (fed 30 + state 5),
+    // LT rate 20% (lt 15 + state 5). One bar at each sell date sets the price.
+    group('YieldMath.compute — capital-gains tax', () {
+      final dists = [DistributionEntry(date: _utc(2023, 12), amount: 1)];
+      final bars = [
+        PriceBar(date: _utc(2024, 1), close: 100),
+        PriceBar(date: _utc(2024, 6), close: 130),
+        PriceBar(date: _utc(2025, 6), close: 130),
+        PriceBar(date: _utc(2025, 9), close: 130),
+      ];
+      YieldResult run(List<Lot> lots) => YieldMath.compute(
+        ticker: 'CG',
+        currentPrice: 130,
+        federalPct: 30,
+        statePct: 5,
+        localPct: 0,
+        ltGainsPct: 15,
+        distributions: dists,
+        priceBars: bars,
+        lots: lots,
+      );
+
+      test('a long-term lot is taxed at the long-term rate', () {
+        // Buy $80×10 = $800 → sell @130 = $1300 → +$500 gain, held >1y → LT 20%.
+        final r = run([
+          Lot(
+            buyDate: _utc(2024, 1, 1),
+            shares: 10,
+            price: 80,
+            sellDate: _utc(2025, 6, 1),
+          ),
+        ]);
+        expect(r.lots.single.isLongTerm, isTrue);
+        expect(r.realizedGL, closeTo(500, _eps));
+        expect(r.capGainsTax, closeTo(500 * 0.20, _eps));
+        // After-tax total nets the gains tax: (1300 − 0 − 100 − 800)/800.
+        expect(r.totalReturnAfterTax, closeTo((1300 - 100 - 800) / 800, _eps));
+      });
+
+      test('a short-term lot is taxed at the ordinary rate', () {
+        // Same +$500 gain but held <1y (Jan→Jun) → ordinary 35%.
+        final r = run([
+          Lot(
+            buyDate: _utc(2024, 1, 1),
+            shares: 10,
+            price: 80,
+            sellDate: _utc(2024, 6, 1),
+          ),
+        ]);
+        expect(r.lots.single.isLongTerm, isFalse);
+        expect(r.capGainsTax, closeTo(500 * 0.35, _eps));
+      });
+
+      test('a realized loss offsets a realized gain in the same bucket', () {
+        // LT winner +$500 (buy $80) and LT loser −$200 (buy $150) → net $300 LT.
+        final r = run([
+          Lot(
+            buyDate: _utc(2024, 1, 1),
+            shares: 10,
+            price: 80,
+            sellDate: _utc(2025, 6, 1),
+          ),
+          Lot(
+            buyDate: _utc(2024, 1, 1),
+            shares: 10,
+            price: 150,
+            sellDate: _utc(2025, 6, 1),
+          ),
+        ]);
+        expect(r.realizedGL, closeTo(300, _eps));
+        expect(r.capGainsTax, closeTo(300 * 0.20, _eps));
+      });
+
+      test('a short-term loss offsets a long-term gain across buckets', () {
+        // LT winner +$500; ST loser −$200 (held Mar→Sep). netST −200 spills into
+        // LT → net $300 taxed at the LT rate.
+        final r = run([
+          Lot(
+            buyDate: _utc(2024, 1, 1),
+            shares: 10,
+            price: 80,
+            sellDate: _utc(2025, 6, 1),
+          ),
+          Lot(
+            buyDate: _utc(2025, 3, 1),
+            shares: 10,
+            price: 150,
+            sellDate: _utc(2025, 9, 1),
+          ),
+        ]);
+        expect(r.capGainsTax, closeTo(300 * 0.20, _eps));
+      });
+
+      test('no sale → no capital-gains tax (default and open lots)', () {
+        // Default (no lots) view.
+        expect(run([]).capGainsTax, closeTo(0, _eps));
+        // An open lot (no sell date) is unrealized → still no gains tax.
+        final open = run([
+          Lot(buyDate: _utc(2024, 1, 1), shares: 10, price: 80),
+        ]);
+        expect(open.capGainsTax, closeTo(0, _eps));
+      });
+    });
+
     test('Lot JSON round-trips shares, price, and sell date', () {
       final closed = Lot(
         buyDate: _utc(2025, 6, 1),
@@ -959,7 +1065,7 @@ void main() {
         '1 lot · 18 months',
         '1 lot · 30 months',
         'Multiple lots',
-        'Closed lot',
+        'Closed lot (long-term)',
         'Falling price',
       ]);
       for (final s in scenarios) {
@@ -1001,7 +1107,7 @@ void main() {
           '1 lot · 18 months',
           '1 lot · 30 months',
           'Multiple lots',
-          'Closed lot',
+          'Closed lot (long-term)',
         ]) {
           final r = byLabel(label).result;
           expect(r.isDefaultLot, isFalse, reason: label);
@@ -1030,7 +1136,7 @@ void main() {
     });
 
     test('a closed lot books a realized gain and no unrealized gain', () {
-      final r = byLabel('Closed lot').result;
+      final r = byLabel('Closed lot (long-term)').result;
       expect(r.lots.single.isClosed, isTrue);
       expect(r.realizedGL, isNot(closeTo(0, 1e-6)));
       expect(r.unrealizedGL, closeTo(0, _eps));

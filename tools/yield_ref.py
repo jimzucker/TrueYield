@@ -72,10 +72,13 @@ def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
     final_shares = s * factor
     income = s * income_per_share
     nav = final_shares * (sell_price if sell_price is not None else current_price)
+    # Long-term if held more than a year (matches Dart's inDays > 365).
+    is_long_term = sell_ts is not None and ((sell_ts - lot["buyTs"]) // 86400) > 365
     return {
         "buyTs": lot["buyTs"],
         "sellTs": sell_ts,
         "isClosed": sell_ts is not None,
+        "isLongTerm": is_long_term,
         "initialShares": s,
         "buyPrice": buy_price,
         "sellPrice": sell_price,
@@ -91,7 +94,7 @@ def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
 
 
 def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
-            roc_pct=0.0, lots=None):
+            roc_pct=0.0, lt_gains_pct=15.0, lots=None):
     """dists: list[(ts, amount)] or [(ts, amount, roc-or-None)]; bars: list[(ts,
     close-or-None)] — both unsorted ok. lots: list of {buyTs, shares, price?,
     sellTs?} or None for the single default lot.
@@ -104,6 +107,7 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
         return {"qualifies": False, "reason": "no distributions in last 12 months"}
 
     combined = (fed_pct + state_pct + local_pct) / 100.0
+    lt_rate = min(max((lt_gains_pct + state_pct + local_pct) / 100.0, 0.0), 1.0)
     # Normalize distributions to (ts, amt, roc-or-None).
     norm = [(d[0], d[1], d[2] if len(d) > 2 else None) for d in dists]
     asc = sorted(norm, key=lambda d: d[0])
@@ -141,13 +145,26 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
     cost_basis = sum(l["costBasis"] for l in lot_results)
     realized_gl = sum(l["gl"] for l in lot_results if l["isClosed"])
     unrealized_gl = sum(l["gl"] for l in lot_results if not l["isClosed"])
+    realized_st = sum(l["gl"] for l in lot_results if l["isClosed"] and not l["isLongTerm"])
+    realized_lt = sum(l["gl"] for l in lot_results if l["isClosed"] and l["isLongTerm"])
+    # Net each bucket; a losing bucket offsets the other; tax positive remainders.
+    net_st, net_lt = realized_st, realized_lt
+    if net_st < 0:
+        net_lt += net_st
+        net_st = 0.0
+    elif net_lt < 0:
+        net_st += net_lt
+        net_lt = 0.0
+    cap_gains_tax = (net_st * combined if net_st > 0 else 0.0) + (
+        net_lt * lt_rate if net_lt > 0 else 0.0)
     drip_shares = total_final
     cf_gross = (total_final / total_initial if total_initial > 0 else 1.0) - 1
     per_share_tax = per_share_income * combined
     after_tax_yield_roc = (total - per_share_tax) / current_price
     total_return_before_tax = (nav - total_cost) / total_cost if total_cost > 0 else 0.0
     total_return_after_tax = (
-        (nav - tax_this_year - total_cost) / total_cost if total_cost > 0 else 0.0
+        (nav - tax_this_year - cap_gains_tax - total_cost) / total_cost
+        if total_cost > 0 else 0.0
     )
 
     return {
@@ -164,6 +181,7 @@ def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
         "dripShares": drip_shares,
         "incomeAmount": income_amount,
         "taxThisYear": tax_this_year,
+        "capGainsTax": cap_gains_tax,
         "nav": nav,
         "costBasis": cost_basis,
         "unrealizedGL": unrealized_gl,

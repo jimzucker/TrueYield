@@ -222,6 +222,13 @@ class LotResult {
 
   bool get isClosed => sellDate != null;
 
+  /// Holding period in whole days for a closed lot; null while still held.
+  int? get holdingDays => sellDate?.difference(buyDate).inDays;
+
+  /// Long-term capital gain if held more than a year (open lots aren't
+  /// realized, so this is false for them).
+  bool get isLongTerm => (holdingDays ?? 0) > 365;
+
   // Total return on this lot's cost, before and after this year's income tax.
   double get totalReturnBeforeTax => cost > 0 ? (nav - cost) / cost : 0.0;
   double get totalReturnAfterTax =>
@@ -267,8 +274,14 @@ class YieldResult {
   final double rocPct;
   // incomeAmount = taxable income portion of distributions = sum * (1 - roc).
   final double incomeAmount;
-  // Tax owed this year, on the income portion only.
+  // Income tax owed this year, on the income (non-ROC) portion only.
   final double taxThisYear;
+  // Capital-gains tax on closed lots' realized gains. Short-term gains (held
+  // ≤ 1y) are taxed at the ordinary [combinedRate]; long-term at [ltRate]
+  // (= LT-federal + state + local). Realized losses net within and across the
+  // ST/LT buckets before tax. Always 0 when nothing is sold (and in the
+  // default no-lots view), so the per-share TTM statement is unaffected.
+  final double capGainsTax;
   // nav = dripShares * currentPrice (what the position is worth now).
   final double nav;
   // Tax basis = original cost + reinvested INCOME. Reinvesting the ROC portion
@@ -329,6 +342,7 @@ class YieldResult {
     required this.rocPct,
     required this.incomeAmount,
     required this.taxThisYear,
+    required this.capGainsTax,
     required this.nav,
     required this.costBasis,
     required this.unrealizedGL,
@@ -365,6 +379,7 @@ class YieldResult {
       rocPct: 0,
       incomeAmount: 0,
       taxThisYear: 0,
+      capGainsTax: 0,
       nav: currentPrice,
       costBasis: currentPrice,
       unrealizedGL: 0,
@@ -397,6 +412,10 @@ class YieldMath {
     required List<DistributionEntry> distributions,
     required List<PriceBar> priceBars,
     double rocPct = 0,
+    // Long-term capital-gains rate, federal only; the effective LT rate adds
+    // State + Local (most states tax LT gains as ordinary income). Short-term
+    // gains use the ordinary combined rate. Default 15 (the common LT bracket).
+    double ltGainsPct = 15,
     // One purchase per lot. null/empty → a single default lot (1 share bought at
     // the start of the window), which reproduces the original per-share math.
     List<Lot>? lots,
@@ -414,6 +433,8 @@ class YieldMath {
     }
 
     final combined = (federalPct + statePct + localPct) / 100.0;
+    // Effective long-term rate: LT-federal + the same state/local as ordinary.
+    final ltRate = ((ltGainsPct + statePct + localPct) / 100.0).clamp(0.0, 1.0);
     final ascDist = [...distributions]
       ..sort((a, b) => a.date.compareTo(b.date));
 
@@ -469,7 +490,9 @@ class YieldMath {
         nav = 0,
         costBasis = 0,
         unrealizedGL = 0,
-        realizedGL = 0;
+        realizedGL = 0,
+        realizedST = 0,
+        realizedLT = 0;
     for (final l in lotResults) {
       totalCost += l.cost;
       totalInitialShares += l.initialShares;
@@ -481,10 +504,28 @@ class YieldMath {
       costBasis += l.costBasis;
       if (l.isClosed) {
         realizedGL += l.gl;
+        if (l.isLongTerm) {
+          realizedLT += l.gl;
+        } else {
+          realizedST += l.gl;
+        }
       } else {
         unrealizedGL += l.gl;
       }
     }
+    // Capital-gains tax: net each bucket, let a losing bucket offset the other,
+    // then tax the remaining positive ST at the ordinary rate and LT at ltRate.
+    double netST = realizedST, netLT = realizedLT;
+    if (netST < 0) {
+      netLT += netST;
+      netST = 0;
+    } else if (netLT < 0) {
+      netST += netLT;
+      netLT = 0;
+    }
+    final capGainsTax =
+        (netST > 0 ? netST * combined : 0.0) +
+        (netLT > 0 ? netLT * ltRate : 0.0);
     // dripShares = total shares now; growth is weighted by initial shares so the
     // single default lot (1 → finalShares) keeps its old "1.00 → X" meaning.
     final dripShares = totalFinalShares;
@@ -498,7 +539,7 @@ class YieldMath {
         ? (nav - totalCost) / totalCost
         : 0.0;
     final totalReturnAfterTax = totalCost > 0
-        ? (nav - taxThisYear - totalCost) / totalCost
+        ? (nav - taxThisYear - capGainsTax - totalCost) / totalCost
         : 0.0;
 
     final descDist = [...distributions]
@@ -516,6 +557,7 @@ class YieldMath {
       rocPct: rocPct,
       incomeAmount: incomeAmount,
       taxThisYear: taxThisYear,
+      capGainsTax: capGainsTax,
       nav: nav,
       costBasis: costBasis,
       unrealizedGL: unrealizedGL,
@@ -647,6 +689,8 @@ YieldResult parseYahooChart(
   required double statePct,
   required double localPct,
   double rocPct = 0,
+  // Long-term capital-gains federal rate; effective LT rate adds State+Local.
+  double ltGainsPct = 15,
   // Per-distribution ROC overrides keyed by the Yahoo dividend epoch (seconds).
   // A matched entry overrides the global [rocPct] for that payout.
   Map<int, double>? rocByDivEpoch,
@@ -737,6 +781,7 @@ YieldResult parseYahooChart(
     distributions: distributionList,
     priceBars: priceBars,
     rocPct: rocPct,
+    ltGainsPct: ltGainsPct,
     lots: lots,
   );
 }
@@ -946,13 +991,13 @@ List<DiagnosticScenario> buildDiagnostics(DateTime now) {
       returnPctExp: 47.12,
     ),
     scn(
-      'Closed lot',
-      'bought 18 mo ago at \$15, sold 6 mo ago at \$20',
-      run([Lot(buyDate: ago(18), shares: 100, sellDate: ago(6))]),
-      costExp: 1500, // 100 sh × $15
-      valueExp: 2148.13, // locked at the $20 sale
-      sharesExp: 107.41,
-      returnPctExp: 42.01,
+      'Closed lot (long-term)',
+      'bought 30 mo ago at \$10, sold 6 mo ago at \$20 · long-term gain',
+      run([Lot(buyDate: ago(30), shares: 100, sellDate: ago(6))]),
+      costExp: 1000, // 100 sh × $10
+      valueExp: 2380.88, // 119.04 DRIP shares locked at the $20 sale
+      sharesExp: 119.04,
+      returnPctExp: 115.58, // after 15%+0% long-term gains tax on the gain
     ),
     scn(
       'Falling price',
@@ -984,6 +1029,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   final _federalCtrl = TextEditingController();
   final _stateCtrl = TextEditingController();
   final _localCtrl = TextEditingController(text: '0');
+  final _ltGainsCtrl = TextEditingController(text: '15');
   final _rocCtrl = TextEditingController(text: '71');
   final _scrollCtrl = ScrollController();
 
@@ -1021,6 +1067,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   static const _kFederal = 'rate_federal';
   static const _kState = 'rate_state';
   static const _kLocal = 'rate_local';
+  static const _kLtGains = 'rate_lt_gains';
   static const _kRoc = 'rate_roc';
   static const _kLotsByTicker = 'lots_by_ticker';
   static const _kRocByTicker = 'roc_overrides_by_ticker';
@@ -1035,6 +1082,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       _federalCtrl,
       _stateCtrl,
       _localCtrl,
+      _ltGainsCtrl,
       _rocCtrl,
     ]) {
       c.addListener(_clearStaleResult);
@@ -1137,6 +1185,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       _federalCtrl.text = prefs.getString(_kFederal) ?? '';
       _stateCtrl.text = prefs.getString(_kState) ?? '';
       _localCtrl.text = prefs.getString(_kLocal) ?? '0';
+      _ltGainsCtrl.text = prefs.getString(_kLtGains) ?? '15';
       _rocCtrl.text = prefs.getString(_kRoc) ?? '71';
       _lotsByTicker = lotsByTicker;
       _rocByTicker = rocByTicker;
@@ -1189,6 +1238,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     await prefs.setString(_kFederal, _federalCtrl.text);
     await prefs.setString(_kState, _stateCtrl.text);
     await prefs.setString(_kLocal, _localCtrl.text);
+    await prefs.setString(_kLtGains, _ltGainsCtrl.text);
     await prefs.setString(_kRoc, _rocCtrl.text);
     await prefs.setString(
       _kLotsByTicker,
@@ -1216,6 +1266,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     _federalCtrl.dispose();
     _stateCtrl.dispose();
     _localCtrl.dispose();
+    _ltGainsCtrl.dispose();
     _rocCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -1230,6 +1281,28 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       if (c.text.isEmpty) return;
       c.selection = TextSelection(baseOffset: 0, extentOffset: c.text.length);
     });
+  }
+
+  // One right-aligned, tabular numeric tax-rate field. Wrapped in Expanded so it
+  // drops straight into the 2×2 rate grid.
+  Widget _rateField(
+    TextEditingController c,
+    String label,
+    InputDecoration deco,
+  ) {
+    return Expanded(
+      child: TextField(
+        controller: c,
+        textAlign: TextAlign.right,
+        style: const TextStyle(
+          fontSize: 18,
+          fontFeatures: [FontFeature.tabularFigures()],
+        ),
+        decoration: deco.copyWith(labelText: label),
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        onTap: () => _selectAll(c),
+      ),
+    );
   }
 
   // null when no explicit lots → compute() uses the single default lot.
@@ -1270,6 +1343,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
         statePct: 0,
         localPct: 0,
         rocPct: 0,
+        ltGainsPct: 0,
       );
       if (!mounted || result.priceBars.isEmpty) return;
       setState(() {
@@ -1319,13 +1393,16 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   // in setState. No-op until a qualifying result exists.
   // Parse the tax/ROC fields. Non-numeric entries return null (so [_calculate]
   // can validate); empty Local/ROC count as 0.
-  ({double? fed, double? state, double? local, double? roc}) _parseRates() {
+  ({double? fed, double? state, double? local, double? lt, double? roc})
+  _parseRates() {
     final localText = _localCtrl.text.trim();
+    final ltText = _ltGainsCtrl.text.trim();
     final rocText = _rocCtrl.text.trim();
     return (
       fed: double.tryParse(_federalCtrl.text.trim()),
       state: double.tryParse(_stateCtrl.text.trim()),
       local: double.tryParse(localText.isEmpty ? '0' : localText),
+      lt: double.tryParse(ltText.isEmpty ? '0' : ltText),
       roc: double.tryParse(rocText.isEmpty ? '0' : rocText),
     );
   }
@@ -1333,7 +1410,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   void _recomputeInPlace() {
     final r = _result;
     if (r == null || !r.qualifies) return;
-    final (:fed, :state, :local, :roc) = _parseRates();
+    final (:fed, :state, :local, :lt, :roc) = _parseRates();
     _result = YieldMath.compute(
       ticker: r.ticker,
       currentPrice: r.currentPrice,
@@ -1357,6 +1434,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       ],
       priceBars: r.priceBars,
       rocPct: roc ?? 0,
+      ltGainsPct: lt ?? 0,
       lots: _activeLots(),
     );
   }
@@ -1372,13 +1450,17 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
       setState(() => _error = 'Enter a ticker.');
       return;
     }
-    final (:fed, :state, :local, :roc) = _parseRates();
-    if (fed == null || state == null || local == null) {
+    final (:fed, :state, :local, :lt, :roc) = _parseRates();
+    if (fed == null || state == null || local == null || lt == null) {
       setState(() => _error = 'Tax rates must be numeric (e.g. 32 for 32%).');
       return;
     }
     if (roc == null || roc < 0 || roc > 100) {
       setState(() => _error = 'Return of capital % must be between 0 and 100.');
+      return;
+    }
+    if (lt < 0 || lt > 100) {
+      setState(() => _error = 'Long-term gains % must be between 0 and 100.');
       return;
     }
     final now = DateTime.now();
@@ -1426,6 +1508,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
         statePct: state,
         localPct: local,
         rocPct: roc,
+        ltGainsPct: lt,
       );
       setState(() {
         _result = result;
@@ -1458,6 +1541,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     required double statePct,
     required double localPct,
     required double rocPct,
+    required double ltGainsPct,
   }) async {
     // Fetch enough history to cover the earliest lot; no lots → the default
     // 1-year window (the original behavior).
@@ -1488,6 +1572,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
         statePct: statePct,
         localPct: localPct,
         rocPct: rocPct,
+        ltGainsPct: ltGainsPct,
         rocByDivEpoch: _rocOverrides,
         rocHistory: rocHistoryForTicker(ticker),
         rocAnnual: rocAnnualForTicker(ticker),
@@ -1614,56 +1699,24 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
           ),
           _buildRocSourceCaption(context),
           const SizedBox(height: 14),
+          // Income-tax rates and the long-term capital-gains rate, in a 2×2 so
+          // all four sit together. Short-term gains use Fed+State+Local; LT
+          // gains use LT%+State+Local (see YieldMath.compute).
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _federalCtrl,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                  decoration: fieldDecoration.copyWith(labelText: 'Federal %'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  onTap: () => _selectAll(_federalCtrl),
-                ),
-              ),
+              _rateField(_federalCtrl, 'Federal %', fieldDecoration),
               const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _stateCtrl,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                  decoration: fieldDecoration.copyWith(labelText: 'State %'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  onTap: () => _selectAll(_stateCtrl),
-                ),
-              ),
+              _rateField(_stateCtrl, 'State %', fieldDecoration),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _rateField(_localCtrl, 'Local %', fieldDecoration),
               const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _localCtrl,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                  decoration: fieldDecoration.copyWith(labelText: 'Local %'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  onTap: () => _selectAll(_localCtrl),
-                ),
-              ),
+              _rateField(_ltGainsCtrl, 'LT gains %', fieldDecoration),
             ],
           ),
           const SizedBox(height: 16),
@@ -2291,7 +2344,8 @@ class _LotDetailCard extends StatelessWidget {
       stat(
         l.isClosed ? 'Sold' : 'Held',
         l.isClosed
-            ? '${fmtDateHuman(l.sellDate!)} @ ${_money(l.sellPrice!)}'
+            ? '${fmtDateHuman(l.sellDate!)} @ ${_money(l.sellPrice!)} · '
+                  '${l.isLongTerm ? 'long-term' : 'short-term'}'
             : 'to today @ ${_money(currentPrice)}',
       ),
       stat(
@@ -2307,11 +2361,7 @@ class _LotDetailCard extends StatelessWidget {
         color: gainColor(theme),
       ),
       stat(l.isClosed ? 'Value at sale' : 'Value now', _money(l.nav)),
-      stat(
-        'Tax this year',
-        _signedMoney(-l.taxThisYear),
-        color: lossColor(theme),
-      ),
+      stat('Income tax', _signedMoney(-l.taxThisYear), color: lossColor(theme)),
       stat(
         l.isClosed ? 'Realized G/L' : 'Unrealized G/L',
         _signedMoney(l.gl),
@@ -2554,7 +2604,9 @@ class _DiagnosticCard extends StatelessWidget {
               _signedMoney(r.unrealizedGL),
               c: signColor(theme, r.unrealizedGL),
             ),
-            row('Tax this year', _signedMoney(-r.taxThisYear)),
+            row('Income tax', _signedMoney(-r.taxThisYear)),
+            if (r.capGainsTax != 0)
+              row('Capital-gains tax', _signedMoney(-r.capGainsTax)),
             if (scenario.checks.isNotEmpty) ...[
               const Divider(height: 18),
               Text(
@@ -2695,11 +2747,15 @@ class _InfoTab extends StatelessWidget {
             'Section 19a-1 notices when you type the ticker; otherwise it '
             'defaults to 71. Edit it anytime (tap “reset” to restore the '
             'fund’s value).\n'
-            '3.  Enter your marginal tax rates — federal, state, local.\n'
+            '3.  Enter your marginal tax rates — federal, state, local — plus a '
+            'long-term gains % (federal; defaults to 15). Short-term gains use '
+            'your ordinary rate; long-term gains use the LT % (both add State + '
+            'Local).\n'
             '4.  (Optional) Add lots — real buy dates with a share count and/or '
             'cost (enter both and that’s your exact basis). Give a lot a sell '
-            'date and it books a realized gain; leave it blank '
-            'to hold to today. No lots = one share bought a year ago.\n'
+            'date and it books a realized gain (taxed long-term if held over a '
+            'year); leave it blank to hold to today. No lots = one share bought '
+            'a year ago.\n'
             '5.  Tap Calculate.',
           ),
           const Divider(height: 12),
@@ -2719,12 +2775,13 @@ class _InfoTab extends StatelessWidget {
                     'your share count — e.g. 1.00 → 1.59.',
               ),
               _InfoTerm(
-                term: 'Income / Unrealized G/L / Tax this year',
+                term: 'Income / G/L / Income tax / Capital-gains tax',
                 desc:
-                    'The three pieces that sum to the total: taxable income, the '
-                    'paper gain or loss on your shares, and the tax due now. With '
-                    'sold lots a Realized G/L line is added for gains booked at '
-                    'the sell price.',
+                    'The pieces that sum to the total: taxable income, the gain '
+                    'or loss on your shares, the income tax due now, and — when '
+                    'you’ve sold lots — capital-gains tax on the realized gain '
+                    '(short-term at your ordinary rate, long-term at the lower '
+                    'long-term rate).',
               ),
               _InfoTerm(
                 term: 'Advertised vs After-tax yield',
@@ -2817,9 +2874,10 @@ class _InfoTab extends StatelessWidget {
                 '•  Not investment advice — figures are historical (trailing 12 '
                 'months), not a forecast.\n'
                 '•  US tax model: one combined marginal rate on the taxable '
-                '(non-ROC) portion of distributions. Capital-gains tax is NOT '
-                'modeled, so a sold lot’s realized gain is shown before any '
-                'gains tax.\n'
+                '(non-ROC) portion of distributions (income tax). A sold lot’s '
+                'realized gain is also taxed — short-term (held ≤ 1 yr) at that '
+                'ordinary rate, long-term at your Long-term gains rate; realized '
+                'losses offset gains. State/Local apply to both.\n'
                 '•  Return of capital % is your assumption — set it from the '
                 'fund’s latest Section 19a notice.\n'
                 '•  Data is Yahoo Finance’s public, unofficial endpoint and can '
@@ -3203,16 +3261,23 @@ class _ResultCard extends StatelessWidget {
                 nested: true,
               ),
             _StmtRow(
-              label: 'Tax this year',
-              sub: r.realizedGL != 0
-                  ? '${(r.combinedRate * 100).toStringAsFixed(0)}% income tax only '
-                        '(no capital-gains tax modeled)'
-                  : '${(r.combinedRate * 100).toStringAsFixed(0)}% on the '
-                        '${_money(r.incomeAmount)} income',
+              label: 'Income tax',
+              sub:
+                  '${(r.combinedRate * 100).toStringAsFixed(0)}% on the '
+                  '${_money(r.incomeAmount)} income',
               value: _signedMoney(-r.taxThisYear),
               valueColor: lossColor(theme),
               nested: true,
             ),
+            if (r.capGainsTax != 0)
+              _StmtRow(
+                label: 'Capital-gains tax',
+                sub:
+                    'on realized gains (short-term at your rate, long-term lower)',
+                value: _signedMoney(-r.capGainsTax),
+                valueColor: lossColor(theme),
+                nested: true,
+              ),
             const Divider(height: 28),
 
             // The per-share yields (denominator = current price) are a
@@ -3815,7 +3880,7 @@ class _DistributionsTab extends StatelessWidget {
                     color: null,
                   ),
                   (
-                    label: 'Tax this year',
+                    label: 'Income tax',
                     value: _signedMoney(-taxThisYear),
                     color: lossColor(theme),
                   ),

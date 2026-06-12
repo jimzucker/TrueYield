@@ -2446,6 +2446,17 @@ class _DiagnosticCard extends StatelessWidget {
                   ),
                 ),
               ),
+              // The headline after-tax return, visible while collapsed so each
+              // scenario shows its result at a glance.
+              Text(
+                _signedPct(r.totalReturnAfterTax),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: signColor(theme, r.totalReturnAfterTax),
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(width: 8),
               if (scenario.checks.isNotEmpty) ...[
                 _PassPill(
                   ok: scenario.pass,
@@ -3248,6 +3259,65 @@ class _StmtRow extends StatelessWidget {
   }
 }
 
+// A compact 2-up grid of labelled figures — fills the width better than a
+// column of label-left / value-right rows. Used for the Distributions/Prices
+// tab summaries. Values shrink-to-fit so big numbers never overflow.
+class _StatGrid extends StatelessWidget {
+  final List<({String label, String value, Color? color})> stats;
+  const _StatGrid(this.stats);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget cell(({String label, String value, Color? color}) s) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          s.label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              s.value,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: s.color,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+    return Column(
+      children: [
+        for (var i = 0; i < stats.length; i += 2)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: cell(stats[i])),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: i + 1 < stats.length
+                      ? cell(stats[i + 1])
+                      : const SizedBox(),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 // "Show your work" grid: the raw Price/Shares/NAV/Cost-basis/Unrealized-G/L the
 // statement above is computed from, across the start (~1y ago) and current month.
 class _ReferenceGrid extends StatelessWidget {
@@ -3354,75 +3424,98 @@ class _PortfolioGrid extends StatelessWidget {
       fontFeatures: const [FontFeature.tabularFigures()],
     );
 
-    Widget cell(String t, {Color? color, bool head = false}) => Padding(
+    // Right-aligned numeric cell; FittedBox shrinks a too-wide figure (big
+    // portfolios) instead of letting it overflow or wrap.
+    Widget numCell(String t, {Color? color, bool bold = false}) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
-      child: Text(
-        t,
-        textAlign: TextAlign.right,
-        style: head ? headStyle : numStyle?.copyWith(color: color),
-      ),
-    );
-
-    // Closed lots show "buy→sell" months; open lots just the buy month.
-    TableRow lotRow(LotResult l) => TableRow(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
           child: Text(
-            l.isClosed
-                ? '${_monthLabel(l.buyDate)}→${_monthLabel(l.sellDate!)}'
-                : _monthLabel(l.buyDate),
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontStyle: l.isClosed ? FontStyle.italic : null,
+            t,
+            style: numStyle?.copyWith(
+              color: color,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
             ),
           ),
         ),
-        cell('${fmtShares(l.initialShares)}→${fmtShares(l.finalShares)}'),
-        cell(_money(l.cost)),
-        cell(_money(l.nav)),
-        cell(_signedMoney(l.gl), color: signColor(theme, l.gl)),
+      ),
+    );
+
+    Widget headCell(String t, {bool left = false}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+      child: Text(
+        t,
+        textAlign: left ? TextAlign.left : TextAlign.right,
+        style: headStyle,
+      ),
+    );
+
+    Widget labelCell(String t, {bool bold = false, bool italic = false}) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+          child: Text(
+            t,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: bold ? FontWeight.w700 : null,
+              fontStyle: italic ? FontStyle.italic : null,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+
+    TableRow lotRow(LotResult l) => TableRow(
+      children: [
+        labelCell(
+          l.isClosed
+              ? '${_monthLabel(l.buyDate)}→${_monthLabel(l.sellDate!)}'
+              : _monthLabel(l.buyDate),
+          italic: l.isClosed,
+        ),
+        numCell('${fmtShares(l.initialShares)}→${fmtShares(l.finalShares)}'),
+        numCell(_money(l.cost)),
+        numCell(_money(l.nav)),
+        numCell(_signedMoney(l.gl), color: signColor(theme, l.gl)),
       ],
     );
 
     return Table(
+      // Even flex columns spread the row across the full width instead of
+      // clustering the numbers on the right of a wide window.
       columnWidths: const {
-        0: FlexColumnWidth(1.4),
-        1: IntrinsicColumnWidth(),
-        2: IntrinsicColumnWidth(),
-        3: IntrinsicColumnWidth(),
-        4: IntrinsicColumnWidth(),
+        0: FlexColumnWidth(2.4),
+        1: FlexColumnWidth(2.2),
+        2: FlexColumnWidth(1.7),
+        3: FlexColumnWidth(1.7),
+        4: FlexColumnWidth(1.7),
       },
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
         TableRow(
           children: [
-            cell('Lot', head: true),
-            cell('Shares', head: true),
-            cell('Cost', head: true),
-            cell('Value', head: true),
-            cell('G/L', head: true),
+            headCell('Lot', left: true),
+            headCell('Shares'),
+            headCell('Cost'),
+            headCell('Value'),
+            headCell('G/L'),
           ],
         ),
         for (final l in r.lots) lotRow(l),
         TableRow(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: Text(
-                'Total',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            cell(
+            labelCell('Total', bold: true),
+            numCell(
               '${fmtShares(r.totalInitialShares)}→${fmtShares(r.totalFinalShares)}',
+              bold: true,
             ),
-            cell(_money(r.totalCost)),
-            cell(_money(r.nav)),
-            cell(
+            numCell(_money(r.totalCost), bold: true),
+            numCell(_money(r.nav), bold: true),
+            numCell(
               _signedMoney(r.unrealizedGL + r.realizedGL),
               color: signColor(theme, r.unrealizedGL + r.realizedGL),
+              bold: true,
             ),
           ],
         ),
@@ -3605,24 +3698,33 @@ class _DistributionsTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _StmtRow(label: 'Total distributions', value: _money(total)),
-                _StmtRow(label: 'Average per payout', value: _money(avg)),
-                _StmtRow(
-                  label: 'Return of capital ($rocInt%)',
-                  value: _money(rocAmount),
-                  nested: true,
-                ),
-                _StmtRow(
-                  label: 'Taxable income ($incInt%)',
-                  value: _money(taxableIncome),
-                  nested: true,
-                ),
-                _StmtRow(
-                  label: 'Tax this year',
-                  value: _signedMoney(-taxThisYear),
-                  valueColor: lossColor(theme),
-                  nested: true,
-                ),
+                _StatGrid([
+                  (
+                    label: 'Total distributions',
+                    value: _money(total),
+                    color: null,
+                  ),
+                  (
+                    label: 'Average per payout',
+                    value: _money(avg),
+                    color: null,
+                  ),
+                  (
+                    label: 'Return of capital ($rocInt%)',
+                    value: _money(rocAmount),
+                    color: null,
+                  ),
+                  (
+                    label: 'Taxable income ($incInt%)',
+                    value: _money(taxableIncome),
+                    color: null,
+                  ),
+                  (
+                    label: 'Tax this year',
+                    value: _signedMoney(-taxThisYear),
+                    color: lossColor(theme),
+                  ),
+                ]),
                 const SizedBox(height: 6),
                 Text(
                   'Each row’s ROC % auto-fills from the fund’s Section 19a-1 '
@@ -3946,22 +4048,24 @@ class _PricesTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _StmtRow(label: 'Current price', value: _money(r.currentPrice)),
-                _StmtRow(
-                  label: '12-month change',
-                  value: _signedPct(pctChange / 100),
-                  valueColor: signColor(theme, pctChange),
-                ),
-                _StmtRow(
-                  label: 'Average close',
-                  value: _money(mean),
-                  nested: true,
-                ),
-                _StmtRow(
-                  label: 'Range',
-                  value: '${_money(lo)} – ${_money(hi)}',
-                  nested: true,
-                ),
+                _StatGrid([
+                  (
+                    label: 'Current price',
+                    value: _money(r.currentPrice),
+                    color: null,
+                  ),
+                  (
+                    label: '12-month change',
+                    value: _signedPct(pctChange / 100),
+                    color: signColor(theme, pctChange),
+                  ),
+                  (label: 'Average close', value: _money(mean), color: null),
+                  (
+                    label: 'Range',
+                    value: '${_money(lo)} – ${_money(hi)}',
+                    color: null,
+                  ),
+                ]),
               ],
             ),
           );

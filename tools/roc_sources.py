@@ -335,22 +335,27 @@ def _get_plain(url):
         return r.read()
 
 
-def _invesco_pbp_roc(pdf_bytes):
+def _pbp_roc_from_text(text):
     """PBP row: NII · GainFromSale · ReturnOfPrincipal · NetUnrealizedDepr (per
-    share $; '$ -' = 0). ROC% = RoP / (NII + Gain + RoP)."""
+    share $; '$ -' = 0; extracted text can have stray spaces in numbers). ROC% =
+    RoP / (NII + Gain + RoP). Pure (text in) so it's unit-testable."""
+    f = lambda s: 0.0 if s.replace(" ", "") == "-" else float(s.replace(" ", ""))
+    for line in text.splitlines():
+        if re.match(r"^PBP\s", line):
+            nums = re.findall(r"\$\s*([\d][\d.\s]*\d|\d|-)", line)
+            if len(nums) >= 3:
+                nii, gain, rop = f(nums[0]), f(nums[1]), f(nums[2])
+                tot = nii + gain + rop
+                return round(rop / tot * 100, 1) if tot > 0 else None
+    return None
+
+
+def _invesco_pbp_roc(pdf_bytes):
     import io
     import pdfplumber
-    f = lambda s: 0.0 if s.replace(" ", "") == "-" else float(s.replace(" ", ""))
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        for p in pdf.pages:
-            for line in (p.extract_text() or "").splitlines():
-                if re.match(r"^PBP\s", line):
-                    nums = re.findall(r"\$\s*([\d][\d.\s]*\d|\d|-)", line)
-                    if len(nums) >= 3:
-                        nii, gain, rop = f(nums[0]), f(nums[1]), f(nums[2])
-                        tot = nii + gain + rop
-                        return round(rop / tot * 100, 1) if tot > 0 else None
-    return None
+        text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+    return _pbp_roc_from_text(text)
 
 
 def invesco(div_dates):
@@ -381,13 +386,9 @@ _FT_NUM = r"(\$[\d,]+\.\d+|-)"
 _FT_PCT = r"([\d.]+%|-)"
 
 
-def _ft_row_roc(pdf_bytes, ticker):
-    """First Trust notices are row-per-fund and pdfplumber linearizes them. Read
-    the CURRENT table (before the cumulative one); ROC of 0 prints as '-'."""
-    import io
-    import pdfplumber
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+def _ft_roc_from_text(text, ticker):
+    """First Trust notices are row-per-fund. Read the CURRENT table (before the
+    cumulative one); ROC of 0 prints as '-'. Pure so it's unit-testable."""
     current = re.split(r"Total Cumulative|Cumulative\s+Fiscal", text)[0]
     row = re.compile(
         rf"^{ticker}(?:\s*\(\d+\))?\s+[0-9A-Z]{{9}}\s+\S+\s+\w+\s+"
@@ -406,6 +407,14 @@ def _ft_row_roc(pdf_bytes, ticker):
                 roc_pct = round(roc_d / total * 100, 1) if roc_d and total else 0.0
             return round(roc_pct, 1)
     return None
+
+
+def _ft_row_roc(pdf_bytes, ticker):
+    import io
+    import pdfplumber
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+    return _ft_roc_from_text(text, ticker)
 
 
 def firsttrust():
@@ -452,6 +461,17 @@ _YM_8937_URLS = [
 ]
 
 
+def _extract_8937_rocs(text):
+    """{ticker: ROC%} from a Form 8937's text — each fund's data row is
+    'TICKER 3-dates … trailing-%' and the % is constant per fund. Pure."""
+    out = {}
+    for tk, pct in re.findall(
+        r"\b([A-Z]{2,6})\s+\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}/\d{1,2}/\d{4}"
+        r"\s+\d{1,2}/\d{1,2}/\d{4}[^%\n]*?([\d.]+)\s*%", text):
+        out[tk] = round(float(pct), 1)
+    return out
+
+
 def yieldmax_8937():
     """{ticker: {fiscal-year-end year: ROC%}} from YieldMax's combined Form 8937.
     The ROC% is one constant per fund (the fiscal-year aggregate that flows to
@@ -470,11 +490,8 @@ def yieldmax_8937():
             year = (2000 + int(md.group(1))) if md else None
         if year is None:
             continue
-        # Per-fund rows: TICKER then 3 dates … trailing ROC% (constant per fund).
-        for tk, pct in re.findall(
-            r"\b([A-Z]{2,6})\s+\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}/\d{1,2}/\d{4}"
-            r"\s+\d{1,2}/\d{1,2}/\d{4}[^%\n]*?([\d.]+)\s*%", text):
-            out.setdefault(tk, {})[year] = round(float(pct), 1)
+        for tk, pct in _extract_8937_rocs(text).items():
+            out.setdefault(tk, {})[year] = pct
     n = sum(len(v) for v in out.values())
     print(f"  YieldMax 8937: {len(out)} funds · {n} fund-years")
     return out

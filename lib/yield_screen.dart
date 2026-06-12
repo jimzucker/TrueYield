@@ -679,7 +679,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
           Padding(
             padding: const EdgeInsets.only(bottom: 8, left: 2),
             child: Text(
-              'Tax rates — applied to every ticker',
+              'Tax rates',
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
@@ -730,7 +730,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                         ? null
                         : PopupMenuButton<String>(
                             icon: Icon(
-                              Icons.history,
+                              Icons.arrow_drop_down,
                               color: theme.colorScheme.onPrimaryContainer,
                             ),
                             tooltip: 'Saved tickers',

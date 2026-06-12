@@ -736,8 +736,8 @@ void main() {
       await pumpScreen(tester, client);
 
       // The saved-tickers button is shown; opening it lists the stored ticker.
-      expect(find.byIcon(Icons.history), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.history));
+      expect(find.byIcon(Icons.arrow_drop_down), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.arrow_drop_down));
       await tester.pumpAndSettle();
       expect(find.text('NVDY'), findsWidgets);
 

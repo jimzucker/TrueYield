@@ -96,52 +96,53 @@ class PriceBar {
   const PriceBar({required this.date, required this.close});
 }
 
-/// One purchase of the ticker on [buyDate], sized by a share count and/or a
-/// dollar cost — enter whichever you have:
-///   • both → that IS your cost basis (price = cost ÷ shares), more accurate
-///     than a market close (e.g. an odd fill or a transferred-in position);
-///   • shares only → cost is derived from the buy-date market price;
-///   • cost only → shares are derived from the buy-date market price.
-/// If [sellDate] is null the lot is still held (unrealized); otherwise it was
-/// sold on that date and books a realized gain. The default single lot — 1 share
-/// bought at the start of the window, still held — reproduces the app's original
-/// "one share a year ago" behavior exactly.
+/// One purchase: [shares] (qty) of the ticker bought on [buyDate] at [price] per
+/// share. Principal (cost) = shares × price and is derived, not stored, so it
+/// recomputes whenever qty or price changes. [price] is null until set; the buy-
+/// date market close is used as the default. If [sellDate] is null the lot is
+/// still held (unrealized); otherwise it was sold on that date and books a
+/// realized gain. The synthesized default lot — 1 share at the window start,
+/// still held — reproduces the app's original "one share a year ago" behavior.
 class Lot {
   final DateTime buyDate;
-  final double? shares; // entered share count, if any
-  final double? cost; // entered dollar cost, if any
+  final double? shares; // quantity
+  final double? price; // per-share basis; null → use the buy-date market close
   final DateTime? sellDate; // null = still held
 
-  const Lot({required this.buyDate, this.shares, this.cost, this.sellDate});
+  const Lot({required this.buyDate, this.shares, this.price, this.sellDate});
 
   bool get isClosed => sellDate != null;
 
-  /// Initial share count given the buy-date [marketPrice]. Uses the entered
-  /// shares if present, else cost ÷ price (guards a zero/negative price).
-  double initialShares(double marketPrice) =>
-      shares ?? (marketPrice > 0 ? (cost ?? 0) / marketPrice : 0);
+  /// Initial share count (the entered quantity).
+  double initialShares(double marketPrice) => shares ?? 0;
 
-  /// Dollars invested given the buy-date [marketPrice]. Uses the entered cost
-  /// if present, else shares × price.
-  double initialCost(double marketPrice) => cost ?? (shares ?? 0) * marketPrice;
+  /// Per-share basis: the entered price, else the buy-date [marketPrice].
+  double pricePerShare(double marketPrice) => price ?? marketPrice;
+
+  /// Principal invested = shares × price (price falls back to [marketPrice]).
+  double initialCost(double marketPrice) =>
+      (shares ?? 0) * (price ?? marketPrice);
 
   Map<String, dynamic> toJson() => {
     'buyDate': buyDate.toUtc().millisecondsSinceEpoch,
     if (shares != null) 'shares': shares,
-    if (cost != null) 'cost': cost,
+    if (price != null) 'price': price,
     if (sellDate != null) 'sellDate': sellDate!.toUtc().millisecondsSinceEpoch,
   };
 
   factory Lot.fromJson(Map<String, dynamic> j) {
-    // Migrate the old {mode, amount} shape to {shares|cost}.
     double? shares = (j['shares'] as num?)?.toDouble();
-    double? cost = (j['cost'] as num?)?.toDouble();
-    if (shares == null && cost == null && j['amount'] != null) {
-      final amount = (j['amount'] as num).toDouble();
-      if (j['mode'] == 'dollars') {
-        cost = amount;
-      } else {
-        shares = amount;
+    double? price = (j['price'] as num?)?.toDouble();
+    // Migrate older shapes: {shares, cost} → price = cost ÷ shares; the original
+    // {mode, amount} where mode==shares → shares=amount (price unknown).
+    if (price == null) {
+      final cost = (j['cost'] as num?)?.toDouble();
+      if (cost != null && shares != null && shares > 0) {
+        price = cost / shares;
+      } else if (shares == null &&
+          j['amount'] != null &&
+          j['mode'] != 'dollars') {
+        shares = (j['amount'] as num).toDouble();
       }
     }
     return Lot(
@@ -150,7 +151,7 @@ class Lot {
         isUtc: true,
       ),
       shares: shares,
-      cost: cost,
+      price: price,
       sellDate: j['sellDate'] == null
           ? null
           : DateTime.fromMillisecondsSinceEpoch(
@@ -1104,9 +1105,6 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     return YieldMath.priceAt(date, _lastBars);
   }
 
-  // Round a dollar amount to cents for the cost field.
-  static double _round2(double v) => (v * 100).roundToDouble() / 100;
-
   // Yahoo dividend epoch (seconds) — the stable key for a ROC override.
   int _epochOf(DateTime d) => d.toUtc().millisecondsSinceEpoch ~/ 1000;
 
@@ -1197,14 +1195,12 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     }
     final now = DateTime.now();
     for (final lot in _lots) {
-      final hasShares = lot.shares != null;
-      final hasCost = lot.cost != null;
-      if (!hasShares && !hasCost) {
-        setState(() => _error = 'Each lot needs a share count or a cost.');
+      if (lot.shares == null || lot.shares! <= 0) {
+        setState(() => _error = 'Each lot needs a positive quantity.');
         return;
       }
-      if ((hasShares && lot.shares! <= 0) || (hasCost && lot.cost! <= 0)) {
-        setState(() => _error = 'Lot shares and cost must be positive.');
+      if (lot.price != null && lot.price! <= 0) {
+        setState(() => _error = 'Lot price must be positive.');
         return;
       }
       if (lot.buyDate.isAfter(now)) {
@@ -1559,15 +1555,14 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                 ),
                 TextButton.icon(
                   onPressed: () => _mutateLots(() {
-                    // Default: 100 shares bought on the last trading day; cost
-                    // defaults to that day's close × shares when we have prices.
+                    // Default: 100 shares bought on the last trading day; price
+                    // defaults to that day's close when we have prices.
                     final buyDate = lastTradingDay(DateTime.now());
-                    final close = _closeOn(buyDate);
                     _lots.add(
                       Lot(
                         buyDate: buyDate,
                         shares: 100,
-                        cost: close == null ? null : _round2(100 * close),
+                        price: _closeOn(buyDate),
                       ),
                     );
                   }),
@@ -1626,42 +1621,42 @@ class _LotRow extends StatefulWidget {
 }
 
 class _LotRowState extends State<_LotRow> {
-  late final TextEditingController _sharesCtrl;
-  late final TextEditingController _costCtrl;
-  late final FocusNode _sharesFocus;
-  late final FocusNode _costFocus;
+  late final TextEditingController _qtyCtrl;
+  late final TextEditingController _priceCtrl;
+  late final FocusNode _qtyFocus;
+  late final FocusNode _priceFocus;
 
   @override
   void initState() {
     super.initState();
-    _sharesCtrl = TextEditingController(text: fmtNum(widget.lot.shares));
-    _costCtrl = TextEditingController(text: fmtNum(widget.lot.cost));
-    _sharesFocus = FocusNode();
-    _costFocus = FocusNode();
+    _qtyCtrl = TextEditingController(text: fmtNum(widget.lot.shares));
+    _priceCtrl = TextEditingController(text: fmtNum(widget.lot.price));
+    _qtyFocus = FocusNode();
+    _priceFocus = FocusNode();
   }
 
   // Rows are keyed by index, so removing a middle lot reuses this State for a
-  // different lot. When that happens (and we're not mid-edit in a field), resync
-  // it — but never disturb the user's active typing.
+  // different lot. When that happens (and we're not mid-edit), resync the field
+  // — but never disturb the user's active typing.
   @override
   void didUpdateWidget(_LotRow old) {
     super.didUpdateWidget(old);
-    if (!_sharesFocus.hasFocus && widget.lot.shares != old.lot.shares) {
+    if (!_qtyFocus.hasFocus && widget.lot.shares != old.lot.shares) {
       final t = fmtNum(widget.lot.shares);
-      if (_sharesCtrl.text != t) _sharesCtrl.text = t;
+      if (_qtyCtrl.text != t) _qtyCtrl.text = t;
     }
-    if (!_costFocus.hasFocus && widget.lot.cost != old.lot.cost) {
-      final t = fmtNum(widget.lot.cost);
-      if (_costCtrl.text != t) _costCtrl.text = t;
+    if (!_priceFocus.hasFocus && widget.lot.price != old.lot.price) {
+      final t = fmtNum(widget.lot.price);
+      if (_priceCtrl.text != t) _priceCtrl.text = t;
     }
   }
 
   @override
   void dispose() {
-    _sharesFocus.dispose();
-    _costFocus.dispose();
-    _sharesCtrl.dispose();
-    _costCtrl.dispose();
+    _qtyFocus.dispose();
+    _priceFocus.dispose();
+    _qtyCtrl.dispose();
+    _priceCtrl.dispose();
     super.dispose();
   }
 
@@ -1670,9 +1665,9 @@ class _LotRowState extends State<_LotRow> {
   void _emit({
     DateTime? buyDate,
     double? shares,
-    double? cost,
+    double? price,
     bool sharesSet = false,
-    bool costSet = false,
+    bool priceSet = false,
     DateTime? sellDate,
     bool keepSell = true,
   }) {
@@ -1684,7 +1679,7 @@ class _LotRowState extends State<_LotRow> {
       Lot(
         buyDate: newBuy,
         shares: sharesSet ? shares : lot.shares,
-        cost: costSet ? cost : lot.cost,
+        price: priceSet ? price : lot.price,
         sellDate: sell,
       ),
     );
@@ -1701,14 +1696,13 @@ class _LotRowState extends State<_LotRow> {
     );
     if (picked == null) return;
     final buyDate = DateTime.utc(picked.year, picked.month, picked.day);
-    // Default the cost to that day's close × shares when prices are available,
-    // so the basis tracks the market unless the user overrides it.
+    // Default the price to that day's close when we have prices, so the basis
+    // tracks the market unless the user overrides it.
     final close = widget.closeOn(buyDate);
-    final shares = widget.lot.shares;
-    if (close != null && shares != null) {
-      final cost = (shares * close * 100).roundToDouble() / 100;
-      _costCtrl.text = fmtMoneyField(cost);
-      _emit(buyDate: buyDate, cost: cost, costSet: true);
+    if (close != null) {
+      final price = (close * 100).roundToDouble() / 100;
+      _priceCtrl.text = fmtMoneyField(price);
+      _emit(buyDate: buyDate, price: price, priceSet: true);
     } else {
       _emit(buyDate: buyDate);
     }
@@ -1730,6 +1724,21 @@ class _LotRowState extends State<_LotRow> {
 
   void _clearSell() => _emit(keepSell: false);
 
+  Widget _dateButton(String label, VoidCallback onTap) => OutlinedButton(
+    onPressed: onTap,
+    style: OutlinedButton.styleFrom(
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      visualDensity: VisualDensity.compact,
+    ),
+    child: Text(
+      label,
+      style: const TextStyle(fontSize: 12),
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+    ),
+  );
+
   Widget _numField(
     TextEditingController ctrl,
     FocusNode focus,
@@ -1740,13 +1749,13 @@ class _LotRowState extends State<_LotRow> {
     return TextField(
       controller: ctrl,
       focusNode: focus,
-      style: const TextStyle(fontSize: 15),
+      style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         isDense: true,
         labelText: label,
         prefixText: prefix,
         border: const OutlineInputBorder(),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       onChanged: (t) {
@@ -1760,99 +1769,110 @@ class _LotRowState extends State<_LotRow> {
   Widget build(BuildContext context) {
     final lot = widget.lot;
     final theme = Theme.of(context);
+    // Effective price (entered, else the buy-date close if we have it) → the
+    // computed principal that recalcs live as qty / price change.
+    final effPrice = lot.price ?? widget.closeOn(lot.buyDate);
+    final principal = (lot.shares != null && effPrice != null)
+        ? lot.shares! * effPrice
+        : null;
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _pickBuyDate,
-                  icon: const Icon(Icons.event, size: 16),
-                  style: OutlinedButton.styleFrom(
-                    alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 12,
-                    ),
-                  ),
-                  label: Text(
-                    'Bought ${fmtDateHuman(lot.buyDate)}',
-                    style: const TextStyle(fontSize: 13),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                onPressed: widget.onRemove,
-                icon: const Icon(Icons.close, size: 18),
-                tooltip: 'Remove lot',
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // Shares and/or cost — enter whichever you have; both = your basis.
-          Row(
-            children: [
-              Expanded(
-                child: _numField(
-                  _sharesCtrl,
-                  _sharesFocus,
-                  'Shares',
-                  onValue: (v) => _emit(shares: v, sharesSet: true),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _numField(
-                  _costCtrl,
-                  _costFocus,
-                  'Cost',
-                  prefix: '\$',
-                  onValue: (v) => _emit(cost: v, costSet: true),
-                ),
-              ),
-            ],
-          ),
-          // Sell row: held to today, or a sell date that books a realized gain.
-          Padding(
-            padding: const EdgeInsets.only(left: 2, top: 2),
-            child: Row(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.dividerColor),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.fromLTRB(8, 8, 4, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Both dates on one row, plus remove.
+            Row(
               children: [
-                Text(
-                  'Sold:',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                Expanded(
+                  flex: 5,
+                  child: _dateButton(
+                    'Buy ${fmtDateHuman(lot.buyDate)}',
+                    _pickBuyDate,
                   ),
                 ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: _pickSellDate,
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                  ),
-                  child: Text(
+                const SizedBox(width: 6),
+                Expanded(
+                  flex: 5,
+                  child: _dateButton(
                     lot.isClosed
-                        ? fmtDateHuman(lot.sellDate!)
-                        : 'Held to today',
-                    style: const TextStyle(fontSize: 13),
+                        ? 'Sold ${fmtDateHuman(lot.sellDate!)}'
+                        : 'Held',
+                    _pickSellDate,
                   ),
                 ),
                 if (lot.isClosed)
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     onPressed: _clearSell,
-                    icon: const Icon(Icons.close, size: 14),
+                    icon: const Icon(Icons.undo, size: 16),
                     tooltip: 'Clear sell date (hold)',
                   ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  onPressed: widget.onRemove,
+                  icon: const Icon(Icons.close, size: 18),
+                  tooltip: 'Remove lot',
+                ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            // Qty × Price = Principal (principal is computed, read-only).
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: _numField(
+                    _qtyCtrl,
+                    _qtyFocus,
+                    'Qty',
+                    onValue: (v) => _emit(shares: v, sharesSet: true),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  flex: 4,
+                  child: _numField(
+                    _priceCtrl,
+                    _priceFocus,
+                    'Price',
+                    prefix: '\$',
+                    onValue: (v) => _emit(price: v, priceSet: true),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Principal',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Text(
+                        principal == null ? '@ mkt' : _money(principal),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

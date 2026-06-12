@@ -665,42 +665,42 @@ void main() {
       expect(r.totalReturnBeforeTax, closeTo(30.10 / 2000, _eps));
     });
 
-    test('a cost-only lot converts to shares at the buy-date price', () {
+    test('a lot with no price uses the buy-date close as the basis', () {
       final r = YieldMath.compute(
-        ticker: 'USD',
+        ticker: 'MKT',
         currentPrice: 100,
         federalPct: 0,
         statePct: 0,
         localPct: 0,
         distributions: twoDists(),
         priceBars: flatBars(),
-        lots: [Lot(buyDate: _utc(2025, 6, 1), cost: 1000)],
+        lots: [Lot(buyDate: _utc(2025, 6, 1), shares: 10)], // price null
       );
-      // $1000 ÷ $100 = 10 initial shares.
+      // 10 shares × $100 buy-date close = $1,000 cost.
       expect(r.lots.single.initialShares, closeTo(10, _eps));
+      expect(r.lots.single.buyPrice, closeTo(100, _eps));
       expect(r.totalCost, closeTo(1000, _eps));
     });
 
-    test('a lot with both shares and cost uses cost÷shares as the basis', () {
-      // 100 shares for $1500 → $15/share basis even though the market close is
-      // $100. Flat price, no dists → value = 100 × $100 = $10,000.
+    test('a lot with an explicit price sets the basis (principal = qty×price)', () {
+      // 100 shares @ $15 → $1,500 principal even though the market close is $100.
       final r = YieldMath.compute(
-        ticker: 'BOTH',
+        ticker: 'PX',
         currentPrice: 100,
         federalPct: 0,
         statePct: 0,
         localPct: 0,
         distributions: twoDists(),
         priceBars: flatBars(),
-        lots: [Lot(buyDate: _utc(2025, 6, 1), shares: 100, cost: 1500)],
+        lots: [Lot(buyDate: _utc(2025, 6, 1), shares: 100, price: 15)],
       );
       final lot = r.lots.single;
       expect(lot.initialShares, closeTo(100, _eps));
       expect(
         lot.buyPrice,
         closeTo(15, _eps),
-      ); // cost ÷ shares, not the $100 close
-      expect(r.totalCost, closeTo(1500, _eps));
+      ); // the entered price, not the $100 close
+      expect(r.totalCost, closeTo(1500, _eps)); // 100 × $15 principal
       // Income = 100 sh × $2/sh = $200; costBasis = 1500 + 200 = 1700.
       expect(r.incomeAmount, closeTo(200, _eps));
       expect(r.costBasis, closeTo(1700, _eps));
@@ -789,40 +789,45 @@ void main() {
       expect(r.totalReturnBeforeTax, closeTo((r.nav - 1000) / 1000, _eps));
     });
 
-    test('Lot JSON round-trips shares, cost, and sell date', () {
-      final both = Lot(
+    test('Lot JSON round-trips shares, price, and sell date', () {
+      final closed = Lot(
         buyDate: _utc(2025, 6, 1),
         shares: 327,
-        cost: 5000,
+        price: 15.29,
         sellDate: _utc(2025, 12, 1),
       );
-      final costOnly = Lot(buyDate: _utc(2025, 6, 1), cost: 2500);
-      final b = Lot.fromJson(both.toJson());
-      final c = Lot.fromJson(costOnly.toJson());
-      expect(b.shares, 327);
-      expect(b.cost, 5000);
-      expect(b.sellDate, _utc(2025, 12, 1));
-      expect(c.shares, isNull);
-      expect(c.cost, 2500);
-      expect(c.sellDate, isNull);
+      final noPrice = Lot(buyDate: _utc(2025, 6, 1), shares: 50);
+      final a = Lot.fromJson(closed.toJson());
+      final b = Lot.fromJson(noPrice.toJson());
+      expect(a.shares, 327);
+      expect(a.price, 15.29);
+      expect(a.sellDate, _utc(2025, 12, 1));
+      expect(b.shares, 50);
+      expect(b.price, isNull);
+      expect(b.sellDate, isNull);
     });
 
-    test('Lot.fromJson migrates the old {mode, amount} shape', () {
-      final shares = Lot.fromJson({
-        'buyDate': _utc(2025, 6, 1).millisecondsSinceEpoch,
-        'mode': 'shares',
-        'amount': 50,
-      });
-      final dollars = Lot.fromJson({
-        'buyDate': _utc(2025, 6, 1).millisecondsSinceEpoch,
-        'mode': 'dollars',
-        'amount': 5000,
-      });
-      expect(shares.shares, 50);
-      expect(shares.cost, isNull);
-      expect(dollars.cost, 5000);
-      expect(dollars.shares, isNull);
-    });
+    test(
+      'Lot.fromJson migrates older {shares,cost} and {mode,amount} shapes',
+      () {
+        // {shares, cost} → price = cost ÷ shares.
+        final sharesCost = Lot.fromJson({
+          'buyDate': _utc(2025, 6, 1).millisecondsSinceEpoch,
+          'shares': 100,
+          'cost': 1500,
+        });
+        // Oldest {mode: shares, amount}.
+        final modeShares = Lot.fromJson({
+          'buyDate': _utc(2025, 6, 1).millisecondsSinceEpoch,
+          'mode': 'shares',
+          'amount': 50,
+        });
+        expect(sharesCost.shares, 100);
+        expect(sharesCost.price, closeTo(15, _eps));
+        expect(modeShares.shares, 50);
+        expect(modeShares.price, isNull);
+      },
+    );
 
     test('print Portfolio (validated) — YMAG, three lots in app row order', () {
       // Three lots at different buy dates, sized in shares and dollars. Mirrors
@@ -838,7 +843,7 @@ void main() {
         rocPct: 71,
         lots: [
           Lot(buyDate: _utc(2025, 6, 1), shares: 100),
-          Lot(buyDate: _utc(2025, 12, 1), cost: 5000),
+          Lot(buyDate: _utc(2025, 12, 1), shares: 300, price: 16),
           Lot(buyDate: _utc(2026, 3, 1), shares: 50),
         ],
       );

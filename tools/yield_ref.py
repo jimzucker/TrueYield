@@ -40,17 +40,18 @@ def _roc_frac(pct):
 def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
     """One lot's economics (Model A — income scales by the *initial* share count).
 
-    lot: dict {buyTs, shares?, cost?, sellTs?} — enter shares and/or cost; both
-    means cost/shares is the basis. Distributions while held (buyTs <= ts <=
-    sellTs) count; each may carry its own roc (asc holds (ts, amt, roc-or-None)).
-    A closed lot (sellTs set) is valued at the sell-date price (realized gain);
-    an open lot at current_price."""
+    lot: dict {buyTs, shares, price?, sellTs?} — shares is qty and price is the
+    per-share basis (null → buy-date close); principal = shares × price.
+    Distributions while held (buyTs <= ts <= sellTs)
+    count; each may carry its own roc (asc holds (ts, amt, roc-or-None)). A closed
+    lot (sellTs set) is valued at the sell-date price (realized gain); an open lot
+    at current_price."""
     market_buy_price = price_at(lot["buyTs"], sorted_bars) or current_price
-    shares, cost = lot.get("shares"), lot.get("cost")
-    s = shares if shares is not None else (
-        (cost or 0) / market_buy_price if market_buy_price > 0 else 0.0)
-    cost = cost if cost is not None else (shares or 0) * market_buy_price
-    buy_price = cost / s if s > 0 else market_buy_price
+    s = lot.get("shares") or 0
+    buy_price = lot.get("price")
+    if buy_price is None:
+        buy_price = market_buy_price
+    cost = s * buy_price
 
     sell_ts = lot.get("sellTs")
     sell_price = None if sell_ts is None else (price_at(sell_ts, sorted_bars) or current_price)
@@ -92,7 +93,7 @@ def _compute_lot(lot, asc, sorted_bars, current_price, combined, default_roc):
 def compute(ticker, current_price, fed_pct, state_pct, local_pct, dists, bars,
             roc_pct=0.0, lots=None):
     """dists: list[(ts, amount)] or [(ts, amount, roc-or-None)]; bars: list[(ts,
-    close-or-None)] — both unsorted ok. lots: list of {buyTs, shares?, cost?,
+    close-or-None)] — both unsorted ok. lots: list of {buyTs, shares, price?,
     sellTs?} or None for the single default lot.
 
     Mirrors lib/main.dart YieldMath.compute: real broker-DRIP share growth, a
@@ -287,7 +288,7 @@ def portfolio_demo():
 
     lots = [
         {"buyTs": ts(2025, 6, 1), "shares": 100},
-        {"buyTs": ts(2025, 12, 1), "cost": 5000},
+        {"buyTs": ts(2025, 12, 1), "shares": 300, "price": 16},
         {"buyTs": ts(2026, 3, 1), "shares": 50},
     ]
     out = compute(

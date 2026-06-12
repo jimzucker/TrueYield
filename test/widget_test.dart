@@ -443,9 +443,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byTooltip('Remove lot'), findsNWidgets(2));
 
-      // Each lot exposes a sell-date control defaulting to "Held to today".
-      expect(find.text('Sold:'), findsNWidgets(2));
-      expect(find.text('Held to today'), findsNWidgets(2));
+      // Each lot has a Qty/Price/Principal row and a sell control defaulting to
+      // "Held".
+      expect(find.widgetWithText(TextField, 'Qty'), findsNWidgets(2));
+      expect(find.widgetWithText(TextField, 'Price'), findsNWidgets(2));
+      expect(find.text('Principal'), findsNWidgets(2));
+      expect(find.widgetWithText(OutlinedButton, 'Held'), findsNWidgets(2));
 
       await calculate(tester, ticker: 'PORT', federal: '32', state: '5');
 

@@ -2832,7 +2832,7 @@ class _ResultCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(r.ticker, style: theme.textTheme.headlineSmall),
+                  Text(r.ticker, style: theme.textTheme.titleLarge),
                   _StatusChip(qualifies: false),
                 ],
               ),
@@ -2873,6 +2873,14 @@ class _ResultCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(r.ticker, style: theme.textTheme.titleLarge),
+                _StatusChip(qualifies: true),
+              ],
+            ),
+            const SizedBox(height: 6),
             if (fetchedAt != null) ...[
               Text(
                 'As of ${fmtStamp(fetchedAt!)}',

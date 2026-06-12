@@ -40,13 +40,13 @@ jobs:
         run: python3 tools/roc_sources.py
 
       - name: Format generated Dart
-        run: dart format lib/roc_data.dart lib/roc_history.dart lib/price_coverage.dart
+        run: dart format lib/roc_data.dart lib/roc_history.dart lib/price_coverage.dart lib/roc_annual.dart
 
       - name: Commit any changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/ lib/roc_data.dart lib/roc_history.dart lib/price_coverage.dart
+          git add data/ lib/roc_data.dart lib/roc_history.dart lib/price_coverage.dart lib/roc_annual.dart
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else

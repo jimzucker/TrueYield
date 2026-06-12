@@ -441,6 +441,45 @@ def firsttrust():
     return out
 
 
+# YieldMax combined Form 8937 PDFs (one per fiscal-year-end group) — the actual
+# 1099/Box-3 ROC% per fund for a completed FISCAL year (FYE 10/31 or 7/31, not
+# calendar). Yearly docs, irregularly named, so list them here; add a line each
+# January. Verified URLs (HTTP 200).
+_YM_8937_URLS = [
+    "https://yieldmaxetfs.com/wp-content/uploads/TaxDocuments/All%20Funds%20Tax%20Documents/YieldMax%202024%20Form%208937%2030%20Funds.pdf",
+    "https://yieldmaxetfs.com/wp-content/uploads/TaxDocuments/All%20Funds%20Tax%20Documents/8937%20%E2%80%93%20YieldMax%2010.31.25%20FYE%20Funds.pdf",
+    "https://yieldmaxetfs.com/wp-content/uploads/TaxDocuments/All%20Funds%20Tax%20Documents/8937%20-%20YieldMax%207.31.25%20FYE%20Funds.pdf",
+]
+
+
+def yieldmax_8937():
+    """{ticker: {fiscal-year-end year: ROC%}} from YieldMax's combined Form 8937.
+    The ROC% is one constant per fund (the fiscal-year aggregate that flows to
+    1099 Box 3)."""
+    out = {}
+    for u in _YM_8937_URLS:
+        try:
+            text = _pdf_text(_get(u, binary=True))
+        except Exception as e:
+            print(f"  8937 {u.rsplit('/', 1)[-1][:30]}…: failed ({e})"); continue
+        m = re.search(r"Date of Action[:\s]*\d{1,2}/\d{1,2}/(\d{4})", text)
+        if m:
+            year = int(m.group(1))
+        else:  # fall back to the date in the filename (e.g. 10.31.25 or 2024)
+            md = re.search(r"\d{1,2}\.\d{1,2}\.(\d{2})", u) or re.search(r"20(\d{2})", u)
+            year = (2000 + int(md.group(1))) if md else None
+        if year is None:
+            continue
+        # Per-fund rows: TICKER then 3 dates … trailing ROC% (constant per fund).
+        for tk, pct in re.findall(
+            r"\b([A-Z]{2,6})\s+\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}/\d{1,2}/\d{4}"
+            r"\s+\d{1,2}/\d{1,2}/\d{4}[^%\n]*?([\d.]+)\s*%", text):
+            out.setdefault(tk, {})[year] = round(float(pct), 1)
+    n = sum(len(v) for v in out.values())
+    print(f"  YieldMax 8937: {len(out)} funds · {n} fund-years")
+    return out
+
+
 def amplify(div_dates):
     """DIVO/QDVO — the tax-center listing is 403, but the per-notice PDF URL is
     constructable from the pay date (= Yahoo ex-date + 1, verified). Try a small
@@ -548,6 +587,8 @@ def main():
             res = amplify(_div_dates())
         elif name == "invesco":
             res = invesco(_div_dates())
+        elif name == "8937":
+            res = yieldmax_8937()
         elif name == "constants":
             res = constants(_div_dates())
         elif fn:
@@ -571,6 +612,22 @@ def main():
     n = sum(len(v) for v in merged.values())
     print(f"\nmerged: {len(merged)} funds · {n} dated ROC points · as of {as_of}")
     print(f"Wrote {hist_path}, lib/roc_history.dart")
+
+    # Completed-year ROC: YieldMax Form 8937 actuals over the 19a aggregate.
+    import json
+    cur_year = date.today().year
+    try:
+        with open(os.path.join(root, "data", "prices_history.json")) as f:
+            amounts = {t: v.get("dividends", {})
+                       for t, v in json.load(f)["tickers"].items()}
+    except (OSError, ValueError):
+        amounts = {}
+    annual = rr.compute_annual(merged, amounts, cur_year)
+    for t, years in yieldmax_8937().items():
+        annual.setdefault(t, {}).update(
+            {y: p for y, p in years.items() if y < cur_year})
+    rr.write_annual_dart(annual, as_of, os.path.join(root, "lib", "roc_annual.dart"))
+    print(f"annual: {len(annual)} funds with a completed-year ROC")
 
 
 if __name__ == "__main__":

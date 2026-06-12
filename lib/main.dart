@@ -22,6 +22,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'price_coverage.dart';
+import 'roc_annual.dart';
 import 'roc_data.dart';
 import 'roc_history.dart';
 
@@ -33,6 +34,18 @@ double? rocForTicker(String ticker) =>
 /// Per-payable-date ROC% history for [ticker] ([kRocByTickerByEpoch]), or null.
 Map<int, double>? rocHistoryForTicker(String ticker) =>
     kRocByTickerByEpoch[ticker.trim().toUpperCase()];
+
+/// Completed-year ROC% map for [ticker] ([kRocAnnualByTickerYear]), or null.
+Map<int, double>? rocAnnualForTicker(String ticker) =>
+    kRocAnnualByTickerYear[ticker.trim().toUpperCase()];
+
+/// The settled full-year ROC% for a distribution in a COMPLETED calendar year
+/// (8937 actual / 19a aggregate). Null for the current year or if unknown, so
+/// the caller falls back to the live per-distribution value.
+double? rocAnnualFor(Map<int, double>? annual, int divYear, int currentYear) {
+  if (annual == null || divYear >= currentYear) return null;
+  return annual[divYear];
+}
 
 /// The bundled per-distribution ROC% nearest a Yahoo dividend (ex-date) [epoch],
 /// matched to its payable date in [hist] within a few days. Null if none close.
@@ -638,8 +651,13 @@ YieldResult parseYahooChart(
   // A matched entry overrides the global [rocPct] for that payout.
   Map<int, double>? rocByDivEpoch,
   // Bundled per-payable-date ROC% history (from 19a-1 notices), keyed by payable
-  // epoch. Precedence per payout: user override > history > global [rocPct].
+  // epoch. Precedence per payout: user override > completed-year actual >
+  // history > global [rocPct].
   Map<int, double>? rocHistory,
+  // Settled full-year ROC% (8937 actual / 19a aggregate), keyed by year. Applied
+  // to distributions in a COMPLETED calendar year (year < [currentYear]).
+  Map<int, double>? rocAnnual,
+  int currentYear = 0,
   // One purchase per lot; null/empty → the single default lot.
   List<Lot>? lots,
 }) {
@@ -693,11 +711,18 @@ YieldResult parseYahooChart(
       final amt = (m['amount'] as num?)?.toDouble();
       final divTs = (m['date'] as num?)?.toInt();
       if (amt == null || divTs == null) continue;
+      final divDate = DateTime.fromMillisecondsSinceEpoch(
+        divTs * 1000,
+        isUtc: true,
+      );
       distributionList.add(
         DistributionEntry(
-          date: DateTime.fromMillisecondsSinceEpoch(divTs * 1000, isUtc: true),
+          date: divDate,
           amount: amt,
-          rocPct: rocByDivEpoch?[divTs] ?? rocFromHistory(rocHistory, divTs),
+          rocPct:
+              rocByDivEpoch?[divTs] ??
+              rocAnnualFor(rocAnnual, divDate.year, currentYear) ??
+              rocFromHistory(rocHistory, divTs),
         ),
       );
     }
@@ -1322,6 +1347,11 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
             amount: d.amount,
             rocPct:
                 _rocOverrides[_epochOf(d.date)] ??
+                rocAnnualFor(
+                  rocAnnualForTicker(r.ticker),
+                  d.date.year,
+                  DateTime.now().year,
+                ) ??
                 rocFromHistory(rocHistoryForTicker(r.ticker), _epochOf(d.date)),
           ),
       ],
@@ -1460,6 +1490,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
         rocPct: rocPct,
         rocByDivEpoch: _rocOverrides,
         rocHistory: rocHistoryForTicker(ticker),
+        rocAnnual: rocAnnualForTicker(ticker),
+        currentYear: DateTime.now().year,
         lots: _activeLots(),
       );
     } finally {
@@ -1502,6 +1534,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                     result: _result,
                     rocOverrides: _rocOverrides,
                     rocHistory: rocHistoryForTicker(_result?.ticker ?? ''),
+                    rocAnnual: rocAnnualForTicker(_result?.ticker ?? ''),
+                    currentYear: DateTime.now().year,
                     defaultRoc: double.tryParse(_rocCtrl.text.trim()) ?? 0,
                     onRocChanged: _setRocOverride,
                   ),
@@ -3638,12 +3672,18 @@ class _DistributionsTab extends StatelessWidget {
   // Bundled per-payable-date ROC% history for this ticker (keyed by payable
   // epoch), auto-filled per row when no user override exists.
   final Map<int, double>? rocHistory;
+  // Settled full-year ROC% by year (8937 actual / 19a aggregate); used for rows
+  // in a completed calendar year (year < [currentYear]).
+  final Map<int, double>? rocAnnual;
+  final int currentYear;
   final double defaultRoc;
   final void Function(int epoch, double? pct) onRocChanged;
   const _DistributionsTab({
     required this.result,
     this.rocOverrides = const {},
     this.rocHistory,
+    this.rocAnnual,
+    this.currentYear = 0,
     this.defaultRoc = 0,
     this.onRocChanged = _noop,
   });
@@ -3818,7 +3858,11 @@ class _DistributionsTab extends StatelessWidget {
         }
         final d = r.distributions[i - 2];
         final epoch = d.date.toUtc().millisecondsSinceEpoch ~/ 1000;
-        final histRoc = rocFromHistory(rocHistory, epoch);
+        // Completed year → the settled full-year figure; current year → the
+        // live per-distribution notice value.
+        final histRoc =
+            rocAnnualFor(rocAnnual, d.date.year, currentYear) ??
+            rocFromHistory(rocHistory, epoch);
         final rocPct = rocOverrides[epoch] ?? histRoc ?? defaultRoc;
         final rocDollars = d.amount * rocPct / 100;
         final num = theme.textTheme.bodyMedium?.copyWith(

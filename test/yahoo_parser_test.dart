@@ -132,6 +132,51 @@ void main() {
       );
       expect(r.distributions.single.rocPct, isNull);
     });
+
+    // The 2025 payout is in a COMPLETED year when "now" is 2026.
+    test('a completed year uses the settled annual ROC over history', () {
+      final r = parseYahooChart(
+        body,
+        ticker: 'TEST',
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        rocHistory: {payableEpoch: 90},
+        rocAnnual: {2025: 40},
+        currentYear: 2026,
+      );
+      expect(r.distributions.single.rocPct, 40); // annual beats history
+    });
+
+    test('a user override still beats the annual figure', () {
+      final r = parseYahooChart(
+        body,
+        ticker: 'TEST',
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        rocByDivEpoch: {divEpoch: 50},
+        rocHistory: {payableEpoch: 90},
+        rocAnnual: {2025: 40},
+        currentYear: 2026,
+      );
+      expect(r.distributions.single.rocPct, 50);
+    });
+
+    test('the current year ignores the annual figure (uses history)', () {
+      // Same payout, but "now" is 2025 — so 2025 is the current year.
+      final r = parseYahooChart(
+        body,
+        ticker: 'TEST',
+        federalPct: 32,
+        statePct: 5,
+        localPct: 0,
+        rocHistory: {payableEpoch: 90},
+        rocAnnual: {2025: 40},
+        currentYear: 2025,
+      );
+      expect(r.distributions.single.rocPct, 90); // history, annual not applied
+    });
   });
 
   group('parseYahooChart — error branches', () {

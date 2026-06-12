@@ -45,13 +45,13 @@ TrueYield simulates a full year of **broker DRIP** reinvestment, taxes only the 
 
 1. **Enter a ticker** (e.g. `YMAG`, `SCHD`, `JEPI`).
 2. **Return of capital %** — auto-fills for the tracked funds (see [Bundled ROC data](#bundled-roc-data)); edit it if you disagree, or set it by hand for funds we don't track.
-3. **Enter your marginal tax rates** — federal, state, and local, as whole percentages (local defaults to `0`).
-4. *(Optional)* **Add lots** on the form — real buy dates with a share count and/or cost. Give a lot a sell date and it books a realized gain; leave it blank to hold to today. No lots means "one share bought a year ago."
+3. **Enter your marginal tax rates** — federal, state, and local, as whole percentages (local defaults to `0`), plus a **long-term gains %** (federal; defaults to `15`). Short-term gains are taxed at your ordinary rate; long-term gains at the LT rate — both add State + Local.
+4. *(Optional)* **Add lots** on the form — real buy dates with a share count and/or cost. Give a lot a sell date and it books a realized gain (taxed long-term if held over a year); leave it blank to hold to today. No lots means "one share bought a year ago."
 5. **Tap Calculate.**
 
-The result card leads with **Total return after tax** — your income plus the change in share price, net of this year's tax, measured against what one share cost a year ago. Directly beneath it are the components that sum to it: **income (taxable)**, **realized / unrealized gain/loss**, and **tax this year**. Then two yields on today's price: the **Advertised yield** (the headline) and the **After-tax yield**. A "show your work" grid shows the position economics underneath — a reference grid for the default share, or a per-lot portfolio table when you've entered lots.
+The result card leads with **Total return after tax** — your income plus the change in share price, net of this year's tax, measured against what one share cost a year ago. Directly beneath it are the components that sum to it: **income (taxable)**, **realized / unrealized gain/loss**, **income tax**, and — when you've sold a lot — **capital-gains tax**. A **total-return waterfall** then draws those same pieces, so you can see the start cost grow with income and gains and shrink with taxes down to the after-tax value. Then two yields on today's price: the **Advertised yield** (the headline) and the **After-tax yield**, over a "show your work" grid — a reference grid for the default share, or a per-lot portfolio table when you've entered lots.
 
-The app has six tabs: **Calculate**, **Lots** (full per-lot detail), **Distributions** (every payout split into return-of-capital vs taxable, with an editable per-row ROC %), **Prices** (the daily closes behind the math), **Info** (this guide + the tracked-fund list + CSV downloads), and **Diagnostics** (self-test scenarios). Your inputs and lots are saved locally per ticker, so they're already filled in next time.
+The app has six tabs: **Calculate**, **Lots** (full per-lot detail), **Distributions** (every payout split into return-of-capital vs taxable, with an editable per-row ROC %), **Prices** (the daily closes behind the math, headed by a price-and-distribution sparkline), **Info** (this guide + the tracked-fund list + CSV downloads), and **Diagnostics** (self-test scenarios). Your inputs and lots are saved locally per ticker, so they're already filled in next time.
 
 If a ticker paid no distributions in the last 12 months, it's flagged **"Does not qualify"** and the card shows just the current price.
 
@@ -63,9 +63,9 @@ TrueYield models one share bought ~12 months ago at `start_price`, with every di
 |---|---|---|
 | **Advertised yield** | The headline number most sites quote. | `total distributions / current_price` |
 | **After-tax yield** | What you actually keep, after this year's tax. | `(total distributions − tax) / current_price` |
-| **Total return after tax** | The bottom line: income *and* price change, net of tax, on your original cost. | `(NAV − tax − start_price) / start_price` |
+| **Total return after tax** | The bottom line: income *and* price change, net of income *and* capital-gains tax, on your original cost. | `(NAV − income_tax − gains_tax − start_price) / start_price` |
 
-…where `NAV = shares_after_DRIP × current_price` and `tax = combined_rate × taxable income`. The card also surfaces the **cost basis** (`start_price + reinvested income`) and the resulting **unrealized gain/loss** (`NAV − cost basis`), which is taxed as capital gains only when you sell.
+…where `NAV = shares_after_DRIP × current_price` and `income_tax = combined_rate × taxable income`. The card also surfaces the **cost basis** (`start_price + reinvested income`) and the resulting **unrealized gain/loss** (`NAV − cost basis`), which is taxed only when you sell. When you **do** sell a lot, its realized gain is taxed too: short-term (held ≤ 1 year) at your ordinary combined rate, long-term at the long-term rate (LT % + State + Local). Realized losses net against realized gains before tax.
 
 ## Bundled ROC data
 
@@ -82,7 +82,7 @@ See [PRIVACY.md](./PRIVACY.md) for the full policy.
 ## Important notes
 
 - **Not investment advice.** TrueYield is an analysis tool. The numbers are historical (trailing 12 months) and are not a forecast.
-- **US tax model.** Calculations apply a single combined marginal rate (federal + state + local) to the **taxable** portion of distributions. The return-of-capital portion is treated as a cost-basis reduction (its tax is deferred to sale as capital gains), not taxed in-year. Qualified-dividend rates are not modeled — set the rates to match your situation.
+- **US tax model.** Distributions' **taxable** portion is taxed at a single combined marginal rate (federal + state + local) as income; the return-of-capital portion is a cost-basis reduction, not taxed in-year. A sold lot's realized gain is taxed as capital gains — short-term at the ordinary rate, long-term (held over a year) at the long-term rate (LT % + State + Local) — with realized losses netting against gains. Qualified-dividend rates, the NIIT, and loss carry-forwards are not modeled — set the rates to match your situation.
 - **Daily resolution.** Prices and the DRIP reinvestment use daily closes over a one-year window, so weekly and monthly payers are both handled without bucketing.
 - **Unofficial data source.** Data comes from Yahoo Finance's public, unofficial endpoint, which can change or rate-limit without notice. TrueYield is not affiliated with Yahoo.
 
@@ -99,7 +99,7 @@ Dependencies are deliberately minimal: `http` for the single network call and `s
 
 ## Development
 
-The calculation logic lives in a pure, dependency-free `YieldMath` class (no Flutter, no network, no clock), which makes it straightforward to test. Three checks — formatting, static analysis, and the test suite — run in three places, all kept in sync:
+The calculation logic lives in a pure, dependency-free `YieldMath` class (no Flutter, no network, no clock), which makes it straightforward to test. The app is organised as one Dart library split across `part of 'main.dart'` files by responsibility — `models`, `yield_math`, `yahoo`, `roc`, `format`, `yield_screen`, `result_card`, and `tabs` — so each area is easy to find while sharing a single set of imports. Three checks — formatting, static analysis, and the test suite — run in three places, all kept in sync:
 
 ```sh
 dart format --output=none --set-exit-if-changed .
@@ -114,7 +114,7 @@ flutter test
   git config core.hooksPath .githooks
   ```
 
-The Dart test suite covers the broker-DRIP / return-of-capital math (flat-price baseline, the ROC income split, lot aggregation and realized gains, price-drop and price-rise total return, and daily-bar fixtures verified against the Python reference in [`tools/yield_ref.py`](./tools/yield_ref.py)), the Yahoo response parser and its ROC-precedence rules (user override > completed-year actual > per-distribution history > default), the Diagnostics self-test scenarios, and the app's six-tab rendering, input validation, and saved-input restoration. CI additionally runs [`tools/test_parsers.py`](./tools/test_parsers.py) — fixture tests for the format-fragile scraper/parser internals (notice and Form 8937 parsing, the year aggregates).
+The Dart test suite covers the broker-DRIP / return-of-capital math (flat-price baseline, the ROC income split, lot aggregation and realized gains, short-/long-term capital-gains tax with loss netting, price-drop and price-rise total return, and daily-bar fixtures verified against the Python reference in [`tools/yield_ref.py`](./tools/yield_ref.py)), the total-return waterfall's step data, the Yahoo response parser and its ROC-precedence rules (user override > completed-year actual > per-distribution history > default), the fetch-error messages (unknown symbol vs network vs server error), the Diagnostics self-test scenarios, and the app's six-tab rendering, input validation, and saved-input restoration. CI additionally runs [`tools/test_parsers.py`](./tools/test_parsers.py) — fixture tests for the format-fragile scraper/parser internals (notice and Form 8937 parsing, the year aggregates).
 
 See [SESSION_LOG.md](./SESSION_LOG.md) for the project's iteration history.
 

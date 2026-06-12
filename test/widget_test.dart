@@ -121,10 +121,7 @@ void main() {
     expect(find.text('funds'), findsOneWidget);
     expect(find.text('distributions'), findsOneWidget);
     expect(find.textContaining('Updated '), findsOneWidget);
-
-    // CSV download links.
-    expect(find.text('Download the full history as CSV:'), findsOneWidget);
-    expect(find.byIcon(Icons.download_outlined), findsNWidgets(3));
+    // CSV download links moved to the Distributions/Prices tabs (see below).
   });
 
   testWidgets('empty data tabs show "Run Calculate to populate."', (

@@ -1968,12 +1968,20 @@ class _LotRowState extends State<_LotRow> {
                 if (lot.isClosed)
                   IconButton(
                     visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
+                    ),
                     onPressed: _clearSell,
                     icon: const Icon(Icons.undo, size: 16),
                     tooltip: 'Clear sell date (hold)',
                   ),
                 IconButton(
                   visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
                   onPressed: widget.onRemove,
                   icon: const Icon(Icons.close, size: 18),
                   tooltip: 'Remove lot',
@@ -2585,28 +2593,10 @@ class _InfoTab extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Updated ${fmtDateHuman(DateTime.parse(kRocHistoryAsOf))}',
+            'Updated ${fmtDateHuman(DateTime.parse(kRocHistoryAsOf))} · '
+            'download links live at the bottom of the Distributions and '
+            'Prices tabs.',
             style: theme.textTheme.bodySmall?.copyWith(color: muted),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Download the full history as CSV:',
-            style: TextStyle(color: muted),
-          ),
-          const _AboutLink(
-            icon: Icons.download_outlined,
-            label: 'Return of capital (ticker, payable date, ROC %)',
-            url: '$_dataBase/roc_history.csv',
-          ),
-          const _AboutLink(
-            icon: Icons.download_outlined,
-            label: 'Daily prices (ticker, date, close)',
-            url: '$_dataBase/prices_history.csv',
-          ),
-          const _AboutLink(
-            icon: Icons.download_outlined,
-            label: 'Distributions (ticker, ex-date, amount)',
-            url: '$_dataBase/distributions_history.csv',
           ),
           const Divider(height: 12),
           const _InfoSection(
@@ -2785,26 +2775,66 @@ class _AboutLink extends StatelessWidget {
     final color = Theme.of(context).colorScheme.primary;
     return InkWell(
       onTap: onTap ?? _launch,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  decoration: TextDecoration.underline,
-                  decorationColor: color,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                      decorationColor: color,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// A "Download (CSV)" footer for a data tab — links to the committed,
+/// raw-GitHub-hosted history files (kept current on main by the daily workflow).
+class _ExportFooter extends StatelessWidget {
+  final List<({String label, String url})> files;
+  const _ExportFooter({required this.files});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Download (CSV)',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          for (final f in files)
+            _AboutLink(
+              icon: Icons.download_outlined,
+              label: f.label,
+              url: f.url,
+            ),
+        ],
       ),
     );
   }
@@ -3421,9 +3451,23 @@ class _DistributionsTab extends StatelessWidget {
     final incInt = 100 - rocInt;
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: r.distributions.length + 3,
+      itemCount: r.distributions.length + 4,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
+        if (i == r.distributions.length + 3) {
+          return const _ExportFooter(
+            files: [
+              (
+                label: 'Return-of-capital history (all funds)',
+                url: '$_dataBase/roc_history.csv',
+              ),
+              (
+                label: 'Distributions history (all funds)',
+                url: '$_dataBase/distributions_history.csv',
+              ),
+            ],
+          );
+        }
         if (i == 0) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -3740,9 +3784,19 @@ class _PricesTab extends StatelessWidget {
         : 0.0;
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: closes.length + 2,
+      itemCount: closes.length + 3,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
+        if (i == closes.length + 2) {
+          return const _ExportFooter(
+            files: [
+              (
+                label: 'Daily prices history (all funds)',
+                url: '$_dataBase/prices_history.csv',
+              ),
+            ],
+          );
+        }
         if (i == 0) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),

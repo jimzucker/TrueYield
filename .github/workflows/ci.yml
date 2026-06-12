@@ -43,5 +43,8 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install parser dependencies
+        run: pip install pypdf pdfplumber
+
       - name: Test the data-pipeline parsers
         run: python3 -m unittest tools.test_parsers

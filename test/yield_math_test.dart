@@ -954,10 +954,33 @@ void main() {
         '1 lot · 30 months',
         'Multiple lots',
         'Closed lot',
+        'Falling price',
       ]);
       for (final s in scenarios) {
         expect(s.result.qualifies, isTrue, reason: s.label);
       }
+    });
+
+    test('every scenario passes its baked-in expected checks', () {
+      for (final s in scenarios) {
+        expect(s.checks, isNotEmpty, reason: s.label);
+        for (final c in s.checks) {
+          expect(
+            c.ok,
+            isTrue,
+            reason:
+                '${s.label} · ${c.label}: expected ${c.expected}, '
+                'got ${c.actual}',
+          );
+        }
+        expect(s.pass, isTrue, reason: s.label);
+      }
+    });
+
+    test('the falling-price scenario books a capital loss', () {
+      final r = byLabel('Falling price').result;
+      expect(r.unrealizedGL, lessThan(0));
+      expect(r.totalReturnAfterTax, lessThan(0));
     });
 
     test('no lots → the default (TTM) view', () {

@@ -64,7 +64,7 @@ void main() {
     tester,
   ) async {
     // Tall surface so all scenario cards build (the list is lazy otherwise).
-    tester.view.physicalSize = const Size(1000, 2600);
+    tester.view.physicalSize = const Size(1000, 5200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -79,7 +79,11 @@ void main() {
     expect(find.text('1 lot · 3 months'), findsOneWidget);
     expect(find.text('1 lot · 30 months'), findsOneWidget);
     expect(find.text('Multiple lots'), findsOneWidget);
+    expect(find.text('Falling price'), findsOneWidget);
     expect(find.textContaining('Total return after tax'), findsWidgets);
+    // Every scenario self-checks against its expected values and passes.
+    expect(find.text('FAIL'), findsNothing);
+    expect(find.text('PASS'), findsWidgets);
   });
 
   testWidgets('Info tab explains how to use and read the app', (tester) async {

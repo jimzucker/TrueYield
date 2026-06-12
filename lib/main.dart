@@ -699,76 +699,158 @@ DateTime lastTradingDay(DateTime now) {
 }
 
 /// One self-test scenario for the Diagnostics tab: a labeled [YieldResult]
-/// computed from synthetic data, used to sanity-check the lot math.
+/// computed from synthetic data, plus a list of [checks] that compare the
+/// computed numbers against expected values baked in from the (deliberately
+/// round) synthetic inputs. A scenario [pass]es when every check matches.
 class DiagnosticScenario {
   final String label;
   final String detail;
   final YieldResult result;
-  const DiagnosticScenario(this.label, this.detail, this.result);
+  final List<DiagCheck> checks;
+  const DiagnosticScenario(
+    this.label,
+    this.detail,
+    this.result, {
+    this.checks = const [],
+  });
+
+  bool get pass => checks.every((c) => c.ok);
+}
+
+/// A single expected-vs-actual assertion shown on a Diagnostics card and
+/// asserted by the test suite. [expected] is derived from the synthetic inputs
+/// (see buildDiagnostics); [actual] is what the lot math produced.
+class DiagCheck {
+  final String label;
+  final double expected;
+  final double actual;
+  const DiagCheck(this.label, this.expected, this.actual);
+
+  // Relative + small absolute tolerance so pinned round values don't trip on
+  // floating-point dust or sub-cent DRIP rounding.
+  bool get ok => (expected - actual).abs() <= expected.abs() * 1e-3 + 0.01;
 }
 
 /// Deterministic self-test scenarios computed from synthetic data anchored to
-/// [now] (no network): a rising $10→$13 price over ~3 years with a fixed $0.25
-/// monthly distribution. Covers the holding-period cases — no lots, a lot held
-/// under a year, over a year, over two years, several lots, and a closed lot —
-/// so the Diagnostics tab and the tests share exactly one source of truth. Pure
-/// (takes [now]).
+/// [now] (no network). The inputs are deliberately round so the expected
+/// numbers are checkable by hand: prices step $10 → $15 → $20 across three
+/// one-year bands (and a mirror $20 → $15 → $10 path for the falling case), a
+/// flat $0.10 monthly distribution, 30% tax (all federal), and 50% ROC. Because
+/// every price is keyed to whole months-ago, the results are independent of the
+/// absolute date — so the expected values pinned in [checks] are stable. Covers
+/// no lots, holds under/over a year and over two years, several lots, a closed
+/// lot, and a position whose price fell. The Diagnostics tab and the tests share
+/// this one source of truth. Pure (takes [now]).
 List<DiagnosticScenario> buildDiagnostics(DateTime now) {
   final today = DateTime.utc(now.year, now.month, now.day);
   const months = 37; // ~3 years of monthly bars
-  final bars = <PriceBar>[
+
+  // Round prices keyed to a bar's age in months: oldest year $10, middle $15,
+  // newest $20. The falling path is the mirror image.
+  double rising(int monthsAgo) =>
+      monthsAgo >= 24 ? 10 : (monthsAgo >= 12 ? 15 : 20);
+  double falling(int monthsAgo) =>
+      monthsAgo >= 24 ? 20 : (monthsAgo >= 12 ? 15 : 10);
+
+  List<PriceBar> barsFor(double Function(int) priceAt) => [
     for (int i = months - 1; i >= 0; i--)
       PriceBar(
         date: DateTime.utc(today.year, today.month - i, 1),
-        close: double.parse(
-          (10.0 + (months - 1 - i) * (3.0 / (months - 1))).toStringAsFixed(2),
-        ),
+        close: priceAt(i),
       ),
   ];
+
+  // A flat $0.10 every month — frequent enough that even a 3-month lot catches
+  // a few, small enough that DRIP share growth stays easy to follow.
   final dists = <DistributionEntry>[
     for (int i = months - 1; i >= 1; i--)
       DistributionEntry(
         date: DateTime.utc(today.year, today.month - i, 15),
-        amount: 0.25,
+        amount: 0.10,
       ),
   ];
-  final price = bars.last.close!;
+
+  final barsUp = barsFor(rising);
+  final barsDown = barsFor(falling);
   DateTime ago(int m) => DateTime.utc(today.year, today.month - m, today.day);
 
-  YieldResult run(List<Lot>? lots) => YieldMath.compute(
+  YieldResult run(List<Lot>? lots, {List<PriceBar>? bars}) => YieldMath.compute(
     ticker: 'DIAG',
-    currentPrice: price,
-    federalPct: 32,
-    statePct: 5,
+    currentPrice: (bars ?? barsUp).last.close!,
+    federalPct: 30,
+    statePct: 0,
     localPct: 0,
     distributions: dists,
-    priceBars: bars,
+    priceBars: bars ?? barsUp,
     rocPct: 50,
     lots: lots,
   );
 
+  // Build a scenario and attach the standard expected-vs-actual checks. The
+  // expected values are passed in (pinned from the round inputs); [costExp],
+  // [valueExp], [sharesExp], [returnPctExp] map to the headline result fields.
+  DiagnosticScenario scn(
+    String label,
+    String detail,
+    YieldResult r, {
+    required double costExp,
+    required double valueExp,
+    required double sharesExp,
+    required double returnPctExp,
+  }) => DiagnosticScenario(
+    label,
+    detail,
+    r,
+    checks: [
+      DiagCheck('Cost', costExp, r.totalCost),
+      DiagCheck('Value', valueExp, r.nav),
+      DiagCheck('Shares', sharesExp, r.dripShares),
+      DiagCheck(
+        'After-tax return %',
+        returnPctExp,
+        r.totalReturnAfterTax * 100,
+      ),
+    ],
+  );
+
   return [
-    DiagnosticScenario(
+    scn(
       'No lots',
       '1 share held the full ~3y window · all distributions reinvested',
       run(null),
+      costExp: 10, // 1 share × $10 start
+      valueExp: 26.04, // 1.3021 DRIP shares × $20 now
+      sharesExp: 1.30,
+      returnPctExp: 155.01,
     ),
-    DiagnosticScenario(
+    scn(
       '1 lot · 3 months',
       'held under 12 months · 100 sh',
       run([Lot(buyDate: ago(3), shares: 100)]),
+      costExp: 2000, // 100 sh × $20
+      valueExp: 2030.15,
+      sharesExp: 101.51,
+      returnPctExp: 1.28,
     ),
-    DiagnosticScenario(
+    scn(
       '1 lot · 18 months',
       'held over 12 months · 100 sh',
       run([Lot(buyDate: ago(18), shares: 100)]),
+      costExp: 1500, // 100 sh × $15
+      valueExp: 2213.38,
+      sharesExp: 110.67,
+      returnPctExp: 45.76,
     ),
-    DiagnosticScenario(
+    scn(
       '1 lot · 30 months',
       'held over 2 years · 100 sh',
       run([Lot(buyDate: ago(30), shares: 100)]),
+      costExp: 1000, // 100 sh × $10
+      valueExp: 2453.21,
+      sharesExp: 122.66,
+      returnPctExp: 140.82,
     ),
-    DiagnosticScenario(
+    scn(
       'Multiple lots',
       '3 lots bought 3 / 18 / 30 months ago',
       run([
@@ -776,11 +858,28 @@ List<DiagnosticScenario> buildDiagnostics(DateTime now) {
         Lot(buyDate: ago(18), shares: 100),
         Lot(buyDate: ago(30), shares: 100),
       ]),
+      costExp: 4500, // 2000 + 1500 + 1000
+      valueExp: 6696.74,
+      sharesExp: 334.84,
+      returnPctExp: 47.12,
     ),
-    DiagnosticScenario(
+    scn(
       'Closed lot',
-      'bought 18 mo ago, sold 6 mo ago',
+      'bought 18 mo ago at \$15, sold 6 mo ago at \$20',
       run([Lot(buyDate: ago(18), shares: 100, sellDate: ago(6))]),
+      costExp: 1500, // 100 sh × $15
+      valueExp: 2148.13, // locked at the $20 sale
+      sharesExp: 107.41,
+      returnPctExp: 42.01,
+    ),
+    scn(
+      'Falling price',
+      'bought 18 mo ago at \$15, now \$10 · 100 sh',
+      run([Lot(buyDate: ago(18), shares: 100)], bars: barsDown),
+      costExp: 1500, // 100 sh × $15
+      valueExp: 1168.79, // 116.88 DRIP shares × $10 now → a loss
+      sharesExp: 116.88,
+      returnPctExp: -23.88,
     ),
   ];
 }
@@ -1762,15 +1861,25 @@ class _DiagnosticsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scenarios = buildDiagnostics(DateTime.now());
+    final passed = scenarios.where((s) => s.pass).length;
+    final allPass = passed == scenarios.length;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
-        Text('Diagnostics', style: theme.textTheme.headlineSmall),
+        Row(
+          children: [
+            Expanded(
+              child: Text('Diagnostics', style: theme.textTheme.headlineSmall),
+            ),
+            _PassPill(ok: allPass, text: '$passed / ${scenarios.length} pass'),
+          ],
+        ),
         const SizedBox(height: 4),
         Text(
-          'Self-test scenarios on synthetic data — a price rising \$10 → \$13 '
-          'over ~3 years, a \$0.25 monthly distribution, tax 37%, ROC 50%. They '
-          'sanity-check the lot math across holding periods (no network).',
+          'Self-test scenarios on round synthetic data — price steps \$10 → \$15 '
+          '→ \$20 over ~3 years (mirrored for the falling case), a \$0.10 monthly '
+          'distribution, 30% tax, 50% ROC. Each card checks the computed numbers '
+          'against expected values baked in from those inputs (no network).',
           style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
@@ -1833,6 +1942,13 @@ class _DiagnosticCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (scenario.checks.isNotEmpty) ...[
+                  _PassPill(
+                    ok: scenario.pass,
+                    text: scenario.pass ? 'PASS' : 'FAIL',
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -1884,7 +2000,84 @@ class _DiagnosticCard extends StatelessWidget {
               c: _signColor(r.unrealizedGL),
             ),
             row('Tax this year', _signedMoney(-r.taxThisYear), c: _loss),
+            if (scenario.checks.isNotEmpty) ...[
+              const Divider(height: 18),
+              Text(
+                'Expected vs actual',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              for (final c in scenario.checks) _checkRow(theme, c),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+
+  // One "expected vs actual ✓/✗" line. Money-ish magnitudes (≥10) print as
+  // dollars; small ones (shares, %) keep two decimals.
+  Widget _checkRow(ThemeData theme, DiagCheck c) {
+    String fmt(double v) => v.abs() >= 10 ? _money(v) : v.toStringAsFixed(2);
+    final color = c.ok ? _gain : _loss;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        children: [
+          Icon(
+            c.ok ? Icons.check_circle : Icons.cancel,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              c.label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Text(
+            c.ok ? fmt(c.actual) : '${fmt(c.actual)} ≠ ${fmt(c.expected)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: c.ok ? null : _loss,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// A small rounded pass/fail (or summary) pill used on the Diagnostics tab.
+class _PassPill extends StatelessWidget {
+  final bool ok;
+  final String text;
+  const _PassPill({required this.ok, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = ok
+        ? _gain.withValues(alpha: 0.18)
+        : Theme.of(context).colorScheme.errorContainer;
+    final fg = ok ? _gain : Theme.of(context).colorScheme.onErrorContainer;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

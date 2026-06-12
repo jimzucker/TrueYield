@@ -95,6 +95,9 @@ void main() {
     expect(find.text('1 lot · 30 months'), findsOneWidget);
     expect(find.text('Multiple lots'), findsOneWidget);
     expect(find.text('Falling price'), findsOneWidget);
+    // Passing scenarios collapse by default; expand one to reveal its detail.
+    await tester.tap(find.text('No lots'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('Total return after tax'), findsWidgets);
     // Every scenario self-checks against its expected values and passes.
     expect(find.text('FAIL'), findsNothing);

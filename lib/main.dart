@@ -2303,49 +2303,53 @@ class _DiagnosticCard extends StatelessWidget {
       ),
     );
 
+    final tagPill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        tag,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onSecondaryContainer,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+
+    // Collapsible: passing scenarios stay tucked away so only FAILs (auto-open)
+    // demand attention on this self-test tab.
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    scenario.label,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: !scenario.pass,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  scenario.label,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                if (scenario.checks.isNotEmpty) ...[
-                  _PassPill(
-                    ok: scenario.pass,
-                    text: scenario.pass ? 'PASS' : 'FAIL',
-                  ),
-                  const SizedBox(width: 6),
-                ],
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    tag,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSecondaryContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+              ),
+              if (scenario.checks.isNotEmpty) ...[
+                _PassPill(
+                  ok: scenario.pass,
+                  text: scenario.pass ? 'PASS' : 'FAIL',
                 ),
+                const SizedBox(width: 6),
               ],
-            ),
+              tagPill,
+            ],
+          ),
+          expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          children: [
             Text(
               scenario.detail,
               style: theme.textTheme.bodySmall?.copyWith(
@@ -2365,11 +2369,9 @@ class _DiagnosticCard extends StatelessWidget {
                   '${_grouped(r.dripShares.toStringAsFixed(2))}',
             ),
             row('Distributions received', _money(r.distributionsReceived)),
-            row(
-              'Income (taxable)',
-              _signedMoney(r.incomeAmount),
-              c: gainColor(theme),
-            ),
+            // Income/Tax are always +/−, so no decorative color — reserve color
+            // for the signed G/L and total-return rows where it carries meaning.
+            row('Income (taxable)', _signedMoney(r.incomeAmount)),
             if (r.realizedGL != 0)
               row(
                 'Realized G/L',
@@ -2381,11 +2383,7 @@ class _DiagnosticCard extends StatelessWidget {
               _signedMoney(r.unrealizedGL),
               c: signColor(theme, r.unrealizedGL),
             ),
-            row(
-              'Tax this year',
-              _signedMoney(-r.taxThisYear),
-              c: lossColor(theme),
-            ),
+            row('Tax this year', _signedMoney(-r.taxThisYear)),
             if (scenario.checks.isNotEmpty) ...[
               const Divider(height: 18),
               Text(

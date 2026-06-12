@@ -32,7 +32,7 @@ import re
 import sys
 import urllib.request
 import zipfile
-from datetime import date
+from datetime import date, timedelta
 
 from pypdf import PdfReader
 
@@ -322,6 +322,48 @@ def tappalpha():
         r"https://cdn\.prod\.website-files\.com/[^\"']*?TSPY[^\"']*?19a[^\"']*?\.pdf")
 
 
+def amplify(div_dates):
+    """DIVO/QDVO — the tax-center listing is 403, but the per-notice PDF URL is
+    constructable from the pay date (= Yahoo ex-date + 1, verified). Try a small
+    offset window per distribution."""
+    import time
+    base = "https://amplifyetfs.com/wp-content/uploads/files/19a-1_Notice_{}_{}.pdf"
+    out = {}
+    for t in ["DIVO", "QDVO"]:
+        d = {}
+        # Recent ~3y only — older notices predate Amplify's filing and bulk
+        # requests trip the site's bot protection (which throttles randomly), so
+        # retry the still-unresolved dates a few passes. Pay date = ex-date + 1
+        # (try that first), then a small window either side.
+        exs = div_dates.get(t, [])[-36:]
+        resolved = set()
+        for _ in range(3):
+            pending = [e for e in exs if e not in resolved]
+            if not pending:
+                break
+            for ex in pending:
+                y, m, da = (int(x) for x in ex.split("-"))
+                for off in (1, 0, 2, 3):
+                    dt = date(y, m, da) + timedelta(days=off)
+                    stamp = f"{dt.month:02d}-{dt.day:02d}-{dt.year % 100:02d}"
+                    try:
+                        data = _get(base.format(stamp, t), binary=True)
+                    except Exception:
+                        continue
+                    if not data.startswith(b"%PDF"):
+                        continue
+                    pct = _roc_pct(_pdf_text(data))
+                    if pct is not None:
+                        d[(_payable_date(_pdf_text(data)) or dt).isoformat()] = pct
+                        resolved.add(ex)
+                    break
+                time.sleep(0.3)
+        if d:
+            out[t] = d
+        print(f"  Amplify {t}: {len(d)} dates")
+    return out
+
+
 def roundhill(div_dates):
     """QDTE/XDTE are 100% ROC on every notice observed; seed each fund's
     distribution dates (from Yahoo) at 100%."""
@@ -370,6 +412,7 @@ def collect():
     for name, fn in ADAPTERS.items():
         history.update(fn())
     dd = _div_dates()
+    history.update(amplify(dd))
     history.update(roundhill(dd))
     history.update(constants(dd))
     return history
@@ -381,6 +424,8 @@ def main():
         fn = ADAPTERS.get(name)
         if name == "roundhill":
             res = roundhill(_div_dates())
+        elif name == "amplify":
+            res = amplify(_div_dates())
         elif name == "constants":
             res = constants(_div_dates())
         elif fn:

@@ -42,9 +42,19 @@ GROUPS = {
 }
 BASE = "https://yieldmaxetfs.com/wp-content/uploads/TaxDocuments"
 
-# Funds we can't yet locate a notice folder for — carry the app's historical
-# default so they still auto-fill. Refresh once their group path is added above.
-CARRY = {}
+# Funds whose per-distribution 19a-1 source isn't scriptable yet (First Trust's
+# PDF table doesn't linearize, Goldman's notice URLs are JS-gated GUIDs, Invesco
+# blocks scripted GETs). Carry a verified recent ROC% so they still auto-fill a
+# fund-appropriate default. Drop a fund once a real adapter lands. Values from
+# the 2026 notices (see reference-roc-19a-sources memory).
+CARRY = {
+    "FTHI": 94.0,
+    "FTQI": 98.0,
+    "EIPI": 0.0,
+    "GPIX": 70.0,
+    "GPIQ": 72.0,
+    "PBP": 24.0,
+}
 
 WEEKS_BACK = 26  # how many recent weekly notices to try per group
 

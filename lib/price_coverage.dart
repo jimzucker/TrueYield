@@ -3,6 +3,6 @@
 // Coverage summary for the committed price history, surfaced on the
 // Info tab (the full dataset lives in data/prices_history.json).
 
-const int kPriceFundCount = 40;
-const int kPriceCloseCount = 43404;
+const int kPriceFundCount = 100;
+const int kPriceCloseCount = 70919;
 const String kPriceEarliest = '2007-12-27';

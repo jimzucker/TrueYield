@@ -143,7 +143,7 @@ def _hrefs(html, pat):
 def neos():
     base = "https://neosfunds.com/{}/"
     out = {}
-    for t in ["SPYI", "QQQI", "BTCI", "IWMI", "IAUI"]:
+    for t in ["SPYI", "QQQI", "BTCI", "IWMI", "IAUI", "XQQI", "NIHI", "NEHI", "XBCI", "XSPI"]:
         try:
             html = _get(base.format(t.lower()))
         except Exception as e:
@@ -168,7 +168,7 @@ def neos():
 
 def globalx():
     out = {}
-    for t in ["QYLD", "XYLD", "RYLD"]:
+    for t in ["QYLD", "XYLD", "RYLD", "DJIA", "QYLG", "XYLG", "MLPD"]:
         try:
             html = _get(f"https://www.globalxetfs.com/filings-and-tax-supplements/{t}")
         except Exception as e:
@@ -197,7 +197,7 @@ def proshares():
     except Exception as e:
         print(f"  ProShares: listing failed ({e})"); return {}
     out = {}
-    for t in ["ISPY", "IQQQ"]:
+    for t in ["ISPY", "IQQQ", "ITWO"]:
         urls = sorted(set(
             "https://www.proshares.com" + h for h in _hrefs(
                 html, rf"/globalassets/proshares/documents/19a1/{t.lower()}_19a-[0-9]+\.pdf")))
@@ -227,7 +227,7 @@ def ishares():
     urls = sorted(set(
         "https://www.ishares.com" + h for h in _hrefs(
             html, r"/us/literature/distribution-information/etf-section19-buywrites-[0-9-]+\.pdf")))
-    out = {"TLTW": {}, "LQDW": {}, "IVVW": {}}
+    out = {"TLTW": {}, "LQDW": {}, "IVVW": {}, "HYGW": {}, "IWMW": {}}
     for u in urls:
         try:
             txt = _pdf_text(_get(u, binary=True))
@@ -317,9 +317,12 @@ def vistashares():
 
 
 def tappalpha():
-    return _page_scrape(
-        "TSPY", "https://www.tappalphafunds.com/etfs/tspy",
-        r"https://cdn\.prod\.website-files\.com/[^\"']*?TSPY[^\"']*?19a[^\"']*?\.pdf")
+    out = {}
+    for t in ["TSPY", "TDAQ"]:
+        out.update(_page_scrape(
+            t, f"https://www.tappalphafunds.com/etfs/{t.lower()}",
+            rf"https://cdn\.prod\.website-files\.com/[^\"']*?{t}[^\"']*?19a[^\"']*?\.pdf"))
+    return out
 
 
 _MONTHS_NAME = [
@@ -504,7 +507,7 @@ def amplify(div_dates):
     import time
     base = "https://amplifyetfs.com/wp-content/uploads/files/19a-1_Notice_{}_{}.pdf"
     out = {}
-    for t in ["DIVO", "QDVO"]:
+    for t in ["DIVO", "QDVO", "SLJY", "TLTP"]:
         d = {}
         # Recent ~3y only — older notices predate Amplify's filing and bulk
         # requests trip the site's bot protection (which throttles randomly), so
@@ -543,7 +546,7 @@ def roundhill(div_dates):
     """QDTE/XDTE are 100% ROC on every notice observed; seed each fund's
     distribution dates (from Yahoo) at 100%."""
     out = {}
-    for t in ["QDTE", "XDTE"]:
+    for t in ["QDTE", "XDTE", "RDTE"]:
         d = {ds: 100.0 for ds in div_dates.get(t, [])}
         if d:
             out[t] = d

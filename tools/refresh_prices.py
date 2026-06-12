@@ -30,6 +30,14 @@ UNIVERSE = [
     "MSTY", "ULTY", "IWMI", "QDTE", "FTQI", "TSLY", "OMAH", "QDVO", "TSPY",
     "IAUI", "YMAX", "AIPI", "IQQQ", "AMDY", "PBP", "XDTE", "YMAG", "GOOY",
     "IVVW", "LQDW", "GDXY", "AMZY",
+    # Batch 2 (funds #41-100 by AUM).
+    "MDST", "XQQI", "TDAQ", "FYEE", "SMCY", "ITWO", "DJIA", "NIHI", "RDTE",
+    "MAGY", "QYLG", "EGGY", "SEPI", "YBTC", "LFGY", "GPTY", "APLY", "KLIP",
+    "CEPI", "HYGW", "NVII", "FBY", "HOOY", "MSFO", "MRNY", "WEEI", "MARO",
+    "SOXY", "IFLR", "NEHI", "XYLG", "XBCI", "XSPI", "YETH", "DIVP", "SRHR",
+    "IWMW", "NFLY", "OARK", "GRNI", "YBIT", "SLJY", "TSII", "OEI", "ULTI",
+    "BIGY", "QDTY", "CVRD", "SNOY", "XLEI", "YLDW", "AIYY", "MLPD", "SDTY",
+    "CRCO", "XOMO", "TLTP", "ICOI", "RDTY", "SLTY",
 ]
 
 CHART = "https://query2.finance.yahoo.com/v8/finance/chart/{}?period1=0&period2=9999999999&interval=1d&events=div"

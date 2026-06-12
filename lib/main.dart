@@ -1183,6 +1183,9 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   void _mutateLots(void Function() change) {
     setState(() {
       change();
+      // Bind the lots to the ticker currently in the field, so a later ticker
+      // change flushes them under the right fund.
+      _lotsTicker = _tickerCtrl.text.trim().toUpperCase();
       _result = null;
       _error = null;
       _resultFetchedAt = null;

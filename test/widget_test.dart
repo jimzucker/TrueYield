@@ -33,6 +33,20 @@ void main() {
     expect(find.text('TrueYield'), findsOneWidget);
   });
 
+  testWidgets('corrupt saved lots/ROC JSON does not crash boot', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(const <String, Object>{
+      'last_ticker': 'YMAG',
+      'lots_by_ticker': '{ not valid json',
+      'roc_overrides_by_ticker': 'also not json',
+    });
+    await tester.pumpWidget(const TrueYieldApp());
+    await tester.pumpAndSettle();
+    expect(find.text('TrueYield'), findsOneWidget);
+    expect(find.text('YMAG'), findsOneWidget); // other inputs still restored
+  });
+
   testWidgets('Calculate tab renders the form and the Calculate button', (
     tester,
   ) async {
@@ -489,6 +503,81 @@ void main() {
       expect(find.text('Total'), findsOneWidget);
       expect(find.text('TTM distributions'), findsNothing);
       expect(find.text('Advertised yield'), findsNothing);
+    });
+
+    testWidgets('Lots tab shows per-lot detail after Calculate', (
+      tester,
+    ) async {
+      final client = MockClient(
+        (req) async => http.Response(
+          yahooChartJson(
+            price: 100,
+            months: [
+              DateTime.utc(2025, 7),
+              DateTime.utc(2025, 10),
+              DateTime.utc(2026, 1),
+            ],
+            closes: [100, 100, 100],
+            dividends: {
+              DateTime.utc(2025, 7, 15): 1.0,
+              DateTime.utc(2025, 10, 15): 1.0,
+            },
+          ),
+          200,
+        ),
+      );
+      await pumpScreen(tester, client);
+      await tester.tap(find.text('Add lot'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add lot'));
+      await tester.pumpAndSettle();
+      await calculate(tester, ticker: 'PORT', federal: '32', state: '5');
+
+      await tester.tap(find.widgetWithText(Tab, 'Lots'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('2 lots'), findsOneWidget);
+      expect(find.text('Principal (cost)'), findsNWidgets(2));
+      expect(find.text('Total return (after tax)'), findsNWidgets(2));
+      expect(find.text('Open'), findsNWidgets(2)); // both lots still held
+    });
+
+    testWidgets('lots are saved per ticker and swap when the ticker changes', (
+      tester,
+    ) async {
+      final client = MockClient((req) async => http.Response('', 500));
+      await pumpScreen(tester, client);
+
+      // Ticker AAA with one lot.
+      await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'AAA');
+      await tester.tap(find.text('Add lot'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Remove lot'), findsOneWidget);
+
+      // Switch to BBB and blur the ticker field → its (empty) lots load.
+      await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'BBB');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Remove lot'), findsNothing);
+
+      // Back to AAA → its saved lot is restored.
+      await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'AAA');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Remove lot'), findsOneWidget);
+    });
+
+    testWidgets('a lot with no quantity shows a validation error', (
+      tester,
+    ) async {
+      final client = MockClient((req) async => http.Response('', 500));
+      await pumpScreen(tester, client);
+      await tester.tap(find.text('Add lot'));
+      await tester.pumpAndSettle();
+      // Clear the seeded quantity.
+      await tester.enterText(find.widgetWithText(TextField, 'Qty'), '');
+      await calculate(tester, ticker: 'NOQTY');
+      expect(find.textContaining('positive quantity'), findsOneWidget);
     });
 
     testWidgets('Distributions tab exposes an editable ROC % column', (

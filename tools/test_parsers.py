@@ -34,6 +34,13 @@ class TestRocPct(unittest.TestCase):
         t = "anticipated that 98% of such dividend will be a return of\ncapital."
         self.assertEqual(rs._roc_pct(t), 98.0)
 
+    def test_label_then_pct_no_dollar(self):
+        # Westwood-style: the % follows the ROC label (no $); the NII row's % just
+        # above must NOT be grabbed by the prose branch.
+        t = ("Net Investment Income 0.00% Return of Capital or other Capital "
+             "Source 100.00% Total Distribution (per share) 100.00%")
+        self.assertEqual(rs._roc_pct(t), 100.0)
+
     def test_none(self):
         self.assertIsNone(rs._roc_pct("no return-of-capital figure here"))
 

@@ -109,8 +109,9 @@ def _payable_date(text, fallback=None):
 
 
 # ----------------------------------------------------------------- ROC from text
-_ROC_LABEL = r"(?:Estimated\s+)?Return of Capital"
-_TOT_LABEL = r"Total \(per (?:common share|Capital Share|share)\)"
+_ROC_LABEL = r"(?:Estimated\s+)?Return of Capital(?:\s+or other Capital Source)?"
+_TOT_LABEL = (r"(?:Total \(per (?:common share|Capital Share|share)\)"
+              r"|Total Distribution \(per share\)|Total Per Share|TOTAL)")
 
 
 def _roc_pct(text):
@@ -129,9 +130,19 @@ def _roc_pct(text):
     inline = re.search(_ROC_LABEL + r"\s*\$[0-9.]+\s+([0-9.]+)\s*%", text)
     if inline:
         return round(float(inline.group(1)), 1)
-    prose = re.search(r"(\d+(?:\.\d+)?)\s*%[^.]*?return\s+of\s+capital", text, re.I)
+    # Prose "X% of such/the dividend … return of capital". Require the "of (such|
+    # the) dividend/distribution" context so a bare table "% … Return of Capital"
+    # (where the % belongs to a NII row above) doesn't false-match.
+    prose = re.search(
+        r"(\d+(?:\.\d+)?)\s*%\s+of\s+(?:such|the)\s+(?:dividend|distribution)"
+        r"[^.]*?return\s+of\s+capital", text, re.I)
     if prose:
         return round(float(prose.group(1)), 1)
+    # Last resort: the first % after the ROC label (some notices put the % in a
+    # column with no adjacent $, e.g. "Return of Capital … 100.00%").
+    after = re.search(_ROC_LABEL + r"[^%\n]{0,40}?([0-9.]+)\s*%", text)
+    if after:
+        return round(float(after.group(1)), 1)
     return None
 
 
@@ -542,11 +553,115 @@ def amplify(div_dates):
     return out
 
 
-def roundhill(div_dates):
-    """QDTE/XDTE are 100% ROC on every notice observed; seed each fund's
-    distribution dates (from Yahoo) at 100%."""
+_MONTHS_FULL = [
+    "January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December",
+]
+
+
+def _recent_year_months(n=14):
+    y, m = date.today().year, date.today().month
+    out = []
+    for _ in range(n):
+        out.append((y, m))
+        m -= 1
+        if m == 0:
+            m, y = 12, y - 1
+    return out
+
+
+def corealt():
+    """OEI — Core Alternative; fully guessable monthly URL."""
+    base = "https://www.corealtfunds.com/assets/pdfs/OEI_19a_{}_{}.pdf"
+    d = {}
+    for y, m in _recent_year_months():
+        try:
+            data = _get(base.format(y, _MONTHS_FULL[m - 1]), binary=True)
+        except Exception:
+            continue
+        if not data.startswith(b"%PDF"):
+            continue
+        txt = _pdf_text(data)
+        pct = _roc_pct(txt)
+        if pct is not None:
+            d[(_payable_date(txt) or date(y, m, 15)).isoformat()] = pct
+    print(f"  CoreAlt OEI: {len(d)} dates")
+    return {"OEI": d} if d else {}
+
+
+def westwood():
+    """MDST/WEEI/YLDW — one HTML listing links every monthly single-fund PDF
+    (100% ROC so far)."""
+    try:
+        html = _get("https://westwoodgroup.com/dividend-tax-information/")
+    except Exception as e:
+        print(f"  Westwood: page failed ({e})"); return {}
+    tokens = {
+        "Enhanced-Midstream-Income-ETF": "MDST",
+        "Enhanced-Energy-Income-ETF": "WEEI",
+        "Enhanced-Income-Opportunity-ETF": "YLDW",
+    }
     out = {}
-    for t in ["QDTE", "XDTE", "RDTE"]:
+    urls = sorted(set(_hrefs(
+        html, r"https://westwoodgroup\.com/wp-content/uploads/[^\"']*?19A-1[^\"']*?\.pdf")))
+    for u in urls:
+        t = next((v for k, v in tokens.items() if k in u), None)
+        if not t:
+            continue
+        try:
+            txt = _pdf_text(_get(u, binary=True))
+        except Exception:
+            continue
+        pct = _roc_pct(txt)
+        m = re.search(r"On\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})", txt)
+        dt = (_date_prose(m.group(1)) if m else None) or _payable_date(txt)
+        if pct is not None and dt:
+            out.setdefault(t, {})[dt.isoformat()] = pct
+    for t, d in out.items():
+        print(f"  Westwood {t}: {len(d)} dates")
+    return out
+
+
+def shelton():
+    """SEPI — single-fund monthly PDFs linked from the advisor site."""
+    return _page_scrape(
+        "SEPI",
+        "https://advisor.sheltoncap.com/investment-solutions/exchange-traded-funds/sefpi/",
+        r"https://www\.sheltoncap\.com/wp-content/uploads/[^\"']*?SEPI[^\"']*?\.pdf")
+
+
+def kraneshares(div_dates):
+    """KLIP — the filings index is WAF-blocked, but the per-notice PDF URL is
+    constructable from the record date (≈ Yahoo ex-date): a small offset window
+    per distribution."""
+    import time
+    base = ("https://kraneshares.com/resources/compliance/"
+            "{:04d}_{:02d}_{:02d}_klip_19a.notice.pdf")
+    d = {}
+    for ex in div_dates.get("KLIP", [])[-30:]:
+        y, mo, da = (int(x) for x in ex.split("-"))
+        for off in (1, 0, 2, -1, 3):
+            dt = date(y, mo, da) + timedelta(days=off)
+            try:
+                data = _get(base.format(dt.year, dt.month, dt.day), binary=True)
+            except Exception:
+                continue
+            if not data.startswith(b"%PDF"):
+                continue
+            pct = _roc_pct(_pdf_text(data))
+            if pct is not None:
+                d[(_payable_date(_pdf_text(data)) or dt).isoformat()] = pct
+            break
+        time.sleep(0.2)
+    print(f"  KraneShares KLIP: {len(d)} dates")
+    return {"KLIP": d} if d else {}
+
+
+def roundhill(div_dates):
+    """QDTE/XDTE/RDTE (0DTE) + the covered-call MAGY/YBTC/YETH all run ~100% ROC
+    on every notice observed; seed each fund's distribution dates at 100%."""
+    out = {}
+    for t in ["QDTE", "XDTE", "RDTE", "MAGY", "YBTC", "YETH"]:
         d = {ds: 100.0 for ds in div_dates.get(t, [])}
         if d:
             out[t] = d
@@ -555,9 +670,10 @@ def roundhill(div_dates):
 
 
 def constants(div_dates):
-    """Funds with no 19a notice / no ROC: ordinary-income distributions."""
+    """Funds with no 19a notice / no ROC: ordinary-income distributions.
+    (CVRD/IFLR/SRHR confirmed by research to publish no 19a / ~0% ROC.)"""
     out = {}
-    for t in ["JEPI", "JEPQ", "BUYW"]:
+    for t in ["JEPI", "JEPQ", "BUYW", "CVRD", "IFLR", "SRHR"]:
         d = {ds: 0.0 for ds in div_dates.get(t, [])}
         if d:
             out[t] = d
@@ -569,6 +685,7 @@ ADAPTERS = {
     "neos": neos, "globalx": globalx, "proshares": proshares,
     "ishares": ishares, "rex": rex, "vistashares": vistashares,
     "tappalpha": tappalpha, "firsttrust": firsttrust,
+    "corealt": corealt, "westwood": westwood,
 }
 
 
@@ -592,6 +709,7 @@ def collect():
     dd = _div_dates()
     history.update(amplify(dd))
     history.update(invesco(dd))
+    history.update(kraneshares(dd))
     history.update(roundhill(dd))
     history.update(constants(dd))
     return history
@@ -607,6 +725,8 @@ def main():
             res = amplify(_div_dates())
         elif name == "invesco":
             res = invesco(_div_dates())
+        elif name == "kraneshares":
+            res = kraneshares(_div_dates())
         elif name == "8937":
             res = yieldmax_8937()
         elif name == "constants":

@@ -101,8 +101,8 @@ class _LotDetailCard extends StatelessWidget {
 
     // A compact stat block (muted label over a bold tabular value) — two per
     // row so the card reads as a table and fills the width instead of one tall
-    // column of label-left / value-right rows.
-    Widget stat(String k, String v, {Color? color}) => Column(
+    // column of label-left / value-right rows. `big` bumps the outcome row.
+    Widget stat(String k, String v, {Color? color, bool big = false}) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
@@ -113,15 +113,20 @@ class _LotDetailCard extends StatelessWidget {
         ),
         Text(
           v,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: color,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
+          style:
+              (big ? theme.textTheme.titleMedium : theme.textTheme.bodyMedium)
+                  ?.copyWith(
+                    fontWeight: big ? FontWeight.w700 : FontWeight.w600,
+                    color: color,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
         ),
       ],
     );
 
+    // Ordered so each row is a coherent pair: when bought ↔ how held, then the
+    // headline cost ↔ value, DRIP growth ↔ the cash it reinvested, income ↔ its
+    // tax, and finally the two outcomes (price G/L ↔ after-tax total return).
     final cells = <Widget>[
       stat('Bought', '${fmtDateHuman(l.buyDate)} @ ${_money(l.buyPrice)}'),
       stat(
@@ -131,24 +136,31 @@ class _LotDetailCard extends StatelessWidget {
                   '${l.isLongTerm ? 'long-term' : 'short-term'}'
             : 'to today @ ${_money(currentPrice)}',
       ),
+      stat('Principal (cost)', _money(l.cost)),
+      stat(l.isClosed ? 'Value at sale' : 'Value now', _money(l.nav)),
       stat(
         'Shares (DRIP)',
         '${fmtShares(l.initialShares)} → ${fmtShares(l.finalShares)} '
             '(+${growthPct.toStringAsFixed(growthPct < 10 ? 1 : 0)}%)',
       ),
-      stat('Principal (cost)', _money(l.cost)),
       stat('Distributions', _money(l.distributions)),
       stat(
         'Income (taxable)',
         _signedMoney(l.incomeAmount),
         color: gainColor(theme),
       ),
-      stat(l.isClosed ? 'Value at sale' : 'Value now', _money(l.nav)),
       stat('Income tax', _signedMoney(-l.taxThisYear), color: lossColor(theme)),
       stat(
         l.isClosed ? 'Realized G/L' : 'Unrealized G/L',
         _signedMoney(l.gl),
         color: signColor(theme, l.gl),
+        big: true,
+      ),
+      stat(
+        'Total return (after tax)',
+        _signedPct(l.totalReturnAfterTax),
+        color: signColor(theme, l.totalReturnAfterTax),
+        big: true,
       ),
     ];
 
@@ -210,12 +222,6 @@ class _LotDetailCard extends StatelessWidget {
                   ],
                 ),
               ),
-            const Divider(height: 18),
-            stat(
-              'Total return (after tax)',
-              _signedPct(l.totalReturnAfterTax),
-              color: signColor(theme, l.totalReturnAfterTax),
-            ),
           ],
         ),
       ),

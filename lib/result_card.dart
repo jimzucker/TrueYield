@@ -68,6 +68,17 @@ class _ResultCard extends StatelessWidget {
     // With real lots → a by-lot, dollar-denominated portfolio view.
     final defaultView = r.isDefaultLot;
     final lotCount = r.lots.length;
+    // Surface the return-of-capital slice right where the distribution total
+    // sits — it's the app's whole premise, yet otherwise only the *taxable*
+    // remainder shows below. Folded into the existing sub-line (no new row);
+    // funds that pay no ROC just keep "reinvested via DRIP".
+    final distTotal = defaultView
+        ? r.sumDistributions
+        : r.distributionsReceived;
+    final distSub = r.rocPct > 0
+        ? '${_money(distTotal * r.rocPct / 100)} return of capital '
+              '(${fmtNum(r.rocPct)}%) · reinvested via DRIP'
+        : 'reinvested via DRIP';
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -98,10 +109,8 @@ class _ResultCard extends StatelessWidget {
               label: defaultView
                   ? 'TTM distributions'
                   : 'Distributions received',
-              sub: 'reinvested via DRIP',
-              value: _money(
-                defaultView ? r.sumDistributions : r.distributionsReceived,
-              ),
+              sub: distSub,
+              value: _money(distTotal),
               headline: true,
             ),
             const Divider(height: 28),

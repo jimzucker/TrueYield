@@ -27,7 +27,7 @@ class YieldScreen extends StatefulWidget {
 }
 
 class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
-  final _tickerCtrl = TextEditingController();
+  final _tickerCtrl = TextEditingController(text: 'YMAG');
   final _tickerFocus = FocusNode();
   // Default marginal rates (a common high-tax-state profile); editable and
   // remembered across tickers once the user changes them.
@@ -35,7 +35,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
   final _stateCtrl = TextEditingController(text: '6.85');
   final _localCtrl = TextEditingController(text: '3.876');
   final _ltGainsCtrl = TextEditingController(text: '15');
-  final _rocCtrl = TextEditingController(text: '71');
+  final _rocCtrl = TextEditingController(text: '56.7');
   final _scrollCtrl = ScrollController();
 
   bool _loading = false;
@@ -184,14 +184,14 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
     } catch (_) {
       rocByTicker = {};
     }
-    final ticker = (prefs.getString(_kTicker) ?? '').trim().toUpperCase();
+    final ticker = (prefs.getString(_kTicker) ?? 'YMAG').trim().toUpperCase();
     setState(() {
-      _tickerCtrl.text = prefs.getString(_kTicker) ?? '';
+      _tickerCtrl.text = prefs.getString(_kTicker) ?? 'YMAG';
       _federalCtrl.text = prefs.getString(_kFederal) ?? '24';
       _stateCtrl.text = prefs.getString(_kState) ?? '6.85';
       _localCtrl.text = prefs.getString(_kLocal) ?? '3.876';
       _ltGainsCtrl.text = prefs.getString(_kLtGains) ?? '15';
-      _rocCtrl.text = prefs.getString(_kRoc) ?? '71';
+      _rocCtrl.text = prefs.getString(_kRoc) ?? '56.7';
       _lotsByTicker = lotsByTicker;
       _rocByTicker = rocByTicker;
       _lotsTicker = ticker;
@@ -303,7 +303,7 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
           fontSize: 18,
           fontFeatures: [FontFeature.tabularFigures()],
         ),
-        decoration: deco.copyWith(labelText: label),
+        decoration: deco.copyWith(labelText: label, suffixText: '%'),
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         onTap: () => _selectAll(c),
       ),
@@ -690,18 +690,10 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
           // the labels don't clip on a phone.
           LayoutBuilder(
             builder: (context, constraints) {
-              final fed = _rateField(
-                _federalCtrl,
-                'Federal %',
-                fieldDecoration,
-              );
-              final st = _rateField(_stateCtrl, 'State %', fieldDecoration);
-              final loc = _rateField(_localCtrl, 'Local %', fieldDecoration);
-              final lt = _rateField(
-                _ltGainsCtrl,
-                'LT gains %',
-                fieldDecoration,
-              );
+              final fed = _rateField(_federalCtrl, 'Federal', fieldDecoration);
+              final st = _rateField(_stateCtrl, 'State', fieldDecoration);
+              final loc = _rateField(_localCtrl, 'Local', fieldDecoration);
+              final lt = _rateField(_ltGainsCtrl, 'LT gains', fieldDecoration);
               const gap = SizedBox(width: 10);
               if (constraints.maxWidth >= 600) {
                 return Row(
@@ -781,7 +773,8 @@ class _YieldScreenState extends State<YieldScreen> with WidgetsBindingObserver {
                     fontFeatures: [FontFeature.tabularFigures()],
                   ),
                   decoration: fieldDecoration.copyWith(
-                    labelText: 'Return of capital %',
+                    labelText: 'Return of capital',
+                    suffixText: '%',
                   ),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,

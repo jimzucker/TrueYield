@@ -54,10 +54,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Ticker'), findsOneWidget);
-    expect(find.text('Return of capital %'), findsOneWidget);
-    expect(find.text('Federal %'), findsOneWidget);
-    expect(find.text('State %'), findsOneWidget);
-    expect(find.text('Local %'), findsOneWidget);
+    expect(find.text('Return of capital'), findsOneWidget);
+    expect(find.text('Federal'), findsOneWidget);
+    expect(find.text('State'), findsOneWidget);
+    expect(find.text('Local'), findsOneWidget);
     // "Calculate" appears as both a tab label and the button label.
     expect(find.text('Calculate'), findsNWidgets(2));
   });
@@ -149,6 +149,8 @@ void main() {
     await tester.pumpWidget(const TrueYieldApp());
     await tester.pump();
 
+    // Clear the default ticker so the empty-ticker validation fires.
+    await tester.enterText(find.widgetWithText(TextField, 'Ticker'), '');
     // Tap the Calculate *button* (the one in the form, not the tab).
     await tester.tap(find.widgetWithText(FilledButton, 'Calculate'));
     await tester.pumpAndSettle();
@@ -162,7 +164,7 @@ void main() {
     await tester.pump();
 
     await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'YMAG');
-    await tester.enterText(find.widgetWithText(TextField, 'Federal %'), 'abc');
+    await tester.enterText(find.widgetWithText(TextField, 'Federal'), 'abc');
     await tester.tap(find.widgetWithText(FilledButton, 'Calculate'));
     await tester.pumpAndSettle();
     expect(
@@ -178,10 +180,10 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'YMAG');
-    await tester.enterText(find.widgetWithText(TextField, 'Federal %'), '32');
-    await tester.enterText(find.widgetWithText(TextField, 'State %'), '5');
+    await tester.enterText(find.widgetWithText(TextField, 'Federal'), '32');
+    await tester.enterText(find.widgetWithText(TextField, 'State'), '5');
     await tester.enterText(
-      find.widgetWithText(TextField, 'Return of capital %'),
+      find.widgetWithText(TextField, 'Return of capital'),
       '150',
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Calculate'));
@@ -254,10 +256,10 @@ void main() {
     }) async {
       await tester.enterText(find.widgetWithText(TextField, 'Ticker'), ticker);
       await tester.enterText(
-        find.widgetWithText(TextField, 'Federal %'),
+        find.widgetWithText(TextField, 'Federal'),
         federal,
       );
-      await tester.enterText(find.widgetWithText(TextField, 'State %'), state);
+      await tester.enterText(find.widgetWithText(TextField, 'State'), state);
       // With lots added the form can exceed the test viewport; scroll the
       // button into view before tapping.
       final button = find.widgetWithText(FilledButton, 'Calculate');
@@ -305,6 +307,44 @@ void main() {
       expect(find.textContaining('TTM distributions'), findsWidgets);
       // The card is stamped with when it was fetched.
       expect(find.textContaining('As of'), findsOneWidget);
+    });
+
+    testWidgets('result card surfaces the return-of-capital split', (
+      tester,
+    ) async {
+      final client = MockClient(
+        (req) async => http.Response(
+          yahooChartJson(
+            price: 100,
+            months: [DateTime.utc(2025, 6), DateTime.utc(2026, 6)],
+            closes: [100, 100],
+            dividends: {DateTime.utc(2025, 12, 15): 10.0},
+          ),
+          200,
+        ),
+      );
+      await pumpScreen(tester, client);
+      // Set the ticker first (an unknown one won't auto-fill/override ROC),
+      // then a clean 60% ROC so the split is predictable in the sub-line.
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Ticker'),
+        'ROCFND',
+      );
+      await tester.enterText(find.widgetWithText(TextField, 'Federal'), '30');
+      await tester.enterText(find.widgetWithText(TextField, 'State'), '0');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Return of capital'),
+        '60',
+      );
+      final button = find.widgetWithText(FilledButton, 'Calculate');
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      // ROC is folded into the distributions sub-line (not a separate row).
+      expect(find.textContaining('return of capital (60%)'), findsOneWidget);
+      expect(find.textContaining('reinvested via DRIP'), findsOneWidget);
     });
 
     testWidgets('Distributions tab lists payouts after Calculate', (
@@ -467,7 +507,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final roc = tester.widget<TextField>(
-        find.widgetWithText(TextField, 'Return of capital %'),
+        find.widgetWithText(TextField, 'Return of capital'),
       );
       expect(roc.controller!.text, wanted);
       // The source caption names the fund.
@@ -494,6 +534,11 @@ void main() {
         ),
       );
       await pumpScreen(tester, client);
+
+      // Set the ticker first so the lots attach to it (lots are per-ticker).
+      await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'PORT');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
 
       // No lots yet → the default-lot hint is shown.
       expect(find.textContaining('Default: 1 share'), findsOneWidget);
@@ -540,6 +585,9 @@ void main() {
         ),
       );
       await pumpScreen(tester, client);
+      await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'ONE');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Add lot'));
       await tester.pumpAndSettle();
       await calculate(tester, ticker: 'ONE', federal: '32', state: '5');
@@ -575,6 +623,9 @@ void main() {
         ),
       );
       await pumpScreen(tester, client);
+      await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'PORT');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Add lot'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Add lot'));
@@ -620,6 +671,9 @@ void main() {
     ) async {
       final client = MockClient((req) async => http.Response('', 500));
       await pumpScreen(tester, client);
+      await tester.enterText(find.widgetWithText(TextField, 'Ticker'), 'NOQTY');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Add lot'));
       await tester.pumpAndSettle();
       // Clear the seeded quantity.
@@ -708,7 +762,7 @@ void main() {
 
       // Changing any input drops the now-stale card so it can't mislead.
       await tester.enterText(
-        find.widgetWithText(TextField, 'Return of capital %'),
+        find.widgetWithText(TextField, 'Return of capital'),
         '50',
       );
       await tester.pump();

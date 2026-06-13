@@ -70,11 +70,18 @@ void main() {
     }
 
     await enter('Ticker', 'YMAG');
-    await enter('Federal %', '32');
-    await enter('State %', '5');
+    await enter('Federal', '32');
+    await enter('State', '5');
     await calculate();
 
     // The no-lots (per-share TTM) Calculate view (we're already on this tab).
+    // Frame the top of the result so the distributions header — which now
+    // carries the return-of-capital split — sits at the top of the viewport.
+    await Scrollable.ensureVisible(
+      tester.element(find.text('TTM distributions')),
+      alignment: 0.0,
+    );
+    await tester.pumpAndSettle();
     await binding.takeScreenshot('calculate-result');
 
     // Add a lot back-dated ~a year so the lots views show real DRIP growth +

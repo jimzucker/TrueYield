@@ -5,9 +5,15 @@ const _eps = 1e-9;
 
 DateTime _utc(int y, [int m = 1, int d = 1]) => DateTime.utc(y, m, d);
 
+double _sumNonNet(List<ReturnContribution> rows) =>
+    rows.where((r) => !r.isNet).fold(0.0, (a, r) => a + r.value);
+
+ReturnContribution _net(List<ReturnContribution> rows) =>
+    rows.firstWhere((r) => r.isNet);
+
 void main() {
-  group('returnBarParts — cost→value stacked bar data prep', () {
-    test('the parts reconcile: nav = cost+income+gain, net = nav−tax', () {
+  group('returnContributions — diverging return-bar data prep', () {
+    test('the component values sum to the net return', () {
       final r = YieldMath.compute(
         ticker: 'BAR',
         currentPrice: 120,
@@ -21,18 +27,22 @@ void main() {
         ],
         lots: [Lot(buyDate: _utc(2025, 6, 1), shares: 10, price: 100)],
       );
-      final p = returnBarParts(r);
-      expect(p.cost, closeTo(r.totalCost, _eps));
-      expect(p.income, closeTo(r.incomeAmount, _eps));
-      expect(p.gain, closeTo(r.unrealizedGL + r.realizedGL, _eps));
-      expect(p.tax, closeTo(r.taxThisYear + r.capGainsTax, _eps));
-      // The stack sums to NAV, and the after-tax value is NAV minus tax.
-      expect(p.nav, closeTo(p.cost + p.income + p.gain, _eps));
-      expect(p.nav, closeTo(r.nav, _eps));
-      expect(p.netValue, closeTo(r.nav - p.tax, _eps));
+      final rows = returnContributions(r);
+      // Net = after-tax value − cost, and the parts add up to it.
+      expect(
+        _net(rows).value,
+        closeTo(r.nav - r.taxThisYear - r.capGainsTax - r.totalCost, _eps),
+      );
+      expect(_sumNonNet(rows), closeTo(_net(rows).value, 1e-6));
+      // Income is a positive contribution; income tax is negative.
+      expect(rows.firstWhere((r) => r.label == 'Income').value, greaterThan(0));
+      expect(
+        rows.firstWhere((r) => r.label == 'Income tax').value,
+        lessThan(0),
+      );
     });
 
-    test('a sold long-term lot folds realized gain and gains tax in', () {
+    test('a sold long-term lot adds Realized G/L + Capital-gains tax rows', () {
       final r = YieldMath.compute(
         ticker: 'BAR',
         currentPrice: 120,
@@ -54,13 +64,18 @@ void main() {
           ),
         ],
       );
-      final p = returnBarParts(r);
-      expect(p.gain, closeTo(r.realizedGL, _eps)); // all realized, nothing held
-      expect(p.tax, greaterThan(0)); // capital-gains tax is in the bite
-      expect(p.netValue, closeTo(p.nav - p.tax, _eps));
+      final rows = returnContributions(r);
+      final labels = rows.map((r) => r.label).toList();
+      expect(labels.contains('Realized G/L'), isTrue);
+      expect(labels.contains('Capital-gains tax'), isTrue);
+      expect(
+        rows.firstWhere((r) => r.label == 'Capital-gains tax').value,
+        lessThan(0),
+      );
+      expect(_sumNonNet(rows), closeTo(_net(rows).value, 1e-6));
     });
 
-    test('a price loss makes the gain part negative', () {
+    test('a price loss makes the gain contribution negative', () {
       final r = YieldMath.compute(
         ticker: 'BAR',
         currentPrice: 70,
@@ -74,9 +89,12 @@ void main() {
         ],
         lots: [Lot(buyDate: _utc(2025, 6, 1), shares: 10, price: 100)],
       );
-      final p = returnBarParts(r);
-      expect(p.gain, lessThan(0));
-      expect(p.nav, closeTo(p.cost + p.income + p.gain, _eps));
+      final rows = returnContributions(r);
+      expect(
+        rows.firstWhere((r) => r.label == 'Unrealized G/L').value,
+        lessThan(0),
+      );
+      expect(_sumNonNet(rows), closeTo(_net(rows).value, 1e-6));
     });
   });
 }

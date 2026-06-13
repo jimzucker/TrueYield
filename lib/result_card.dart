@@ -222,34 +222,39 @@ class _ResultCard extends StatelessWidget {
   }
 }
 
-/// Cost vs after-tax value, as two stacked bars. The Value bar stacks the
-/// original cost, income earned, and price gain (or a loss segment), with the
-/// tax shown as a translucent cap off the top and a dashed line at the kept
-/// (after-tax) value — so the proportions, not just the totals, are visible.
-({
-  double cost,
-  double income,
-  double gain,
-  double tax,
-  double nav,
-  double netValue,
-})
-returnBarParts(YieldResult r) {
-  final cost = r.totalCost;
-  final income = r.incomeAmount;
-  final gain = r.unrealizedGL + r.realizedGL;
-  final tax = r.taxThisYear + r.capGainsTax;
-  final nav = cost + income + gain;
-  return (
-    cost: cost,
-    income: income,
-    gain: gain,
-    tax: tax,
-    nav: nav,
-    netValue: nav - tax,
-  );
+/// One contribution row of the return chart: a signed dollar amount that adds
+/// to (or subtracts from) the net return. [isNet] is the summary total.
+class ReturnContribution {
+  final String label;
+  final double value; // signed dollars
+  final bool isNet;
+  const ReturnContribution(this.label, this.value, {this.isNet = false});
 }
 
+/// The signed pieces of the after-tax return — income, gain/loss, and taxes —
+/// plus the net total. The non-net values sum to the net (= after-tax value −
+/// cost), so the diverging bars read as "what built the return, what took from
+/// it." Pure + testable. Mirrors the statement's component rows.
+List<ReturnContribution> returnContributions(YieldResult r) {
+  return [
+    ReturnContribution('Income', r.incomeAmount),
+    if (r.realizedGL != 0) ReturnContribution('Realized G/L', r.realizedGL),
+    if (r.unrealizedGL != 0 || r.realizedGL == 0)
+      ReturnContribution('Unrealized G/L', r.unrealizedGL),
+    ReturnContribution('Income tax', -r.taxThisYear),
+    if (r.capGainsTax != 0)
+      ReturnContribution('Capital-gains tax', -r.capGainsTax),
+    ReturnContribution(
+      'Net return',
+      r.nav - r.taxThisYear - r.capGainsTax - r.totalCost,
+      isNet: true,
+    ),
+  ];
+}
+
+/// Horizontal diverging bars: each return component gets its own full-width row
+/// (positive right, negative left of a zero line), so nothing is squashed into
+/// a sliver the way a cost-anchored stacked bar is.
 class _ReturnBars extends StatelessWidget {
   final YieldResult result;
   const _ReturnBars({required this.result});
@@ -257,20 +262,16 @@ class _ReturnBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final p = returnBarParts(result);
+    final rows = returnContributions(result);
     return SizedBox(
-      height: 214,
+      height: rows.length * 30.0 + 8,
       child: CustomPaint(
         size: Size.infinite,
         painter: _ReturnBarsPainter(
-          cost: p.cost,
-          income: p.income,
-          gain: p.gain,
-          tax: p.tax,
-          costColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-          incomeColor: theme.colorScheme.tertiary,
-          gainCol: gainColor(theme),
-          lossCol: lossColor(theme),
+          rows: rows,
+          gain: gainColor(theme),
+          loss: lossColor(theme),
+          zero: theme.dividerColor,
           textColor: theme.colorScheme.onSurface,
           mutedColor: theme.colorScheme.onSurfaceVariant,
         ),
@@ -280,172 +281,132 @@ class _ReturnBars extends StatelessWidget {
 }
 
 class _ReturnBarsPainter extends CustomPainter {
-  final double cost, income, gain, tax;
-  final Color costColor, incomeColor, gainCol, lossCol, textColor, mutedColor;
+  final List<ReturnContribution> rows;
+  final Color gain, loss, zero, textColor, mutedColor;
   _ReturnBarsPainter({
-    required this.cost,
-    required this.income,
+    required this.rows,
     required this.gain,
-    required this.tax,
-    required this.costColor,
-    required this.incomeColor,
-    required this.gainCol,
-    required this.lossCol,
+    required this.loss,
+    required this.zero,
     required this.textColor,
     required this.mutedColor,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final nav = cost + income + gain;
-    final netValue = nav - tax;
-    final topCI = cost + income;
-    var scale = cost;
-    for (final v in [nav, topCI]) {
-      if (v > scale) scale = v;
+    if (rows.isEmpty) return;
+    final n = rows.length;
+    final rowH = size.height / n;
+
+    // Axis spans [min(0,…), max(0,…)] so zero sits where the signs cross.
+    var lo = 0.0, hi = 0.0;
+    for (final r in rows) {
+      if (r.value < lo) lo = r.value;
+      if (r.value > hi) hi = r.value;
     }
-    scale *= 1.10;
-    if (scale <= 0) return;
+    if (hi == lo) hi = lo + 1;
+    final range = hi - lo;
 
-    const valueH = 16.0; // value labels above the bars
-    const labelH = 16.0; // category labels below
-    const legendH = 20.0; // colour key at the very bottom
-    final chartH = size.height - valueH - labelH - legendH;
-    double y(double v) => valueH + chartH * (1 - v / scale);
+    const labelW = 104.0;
+    const valueW = 64.0;
+    final barLeft = labelW;
+    final barW = (size.width - labelW - valueW).clamp(40.0, size.width);
+    double xOf(double v) => barLeft + barW * (v - lo) / range;
+    final xZero = xOf(0);
 
-    final slot = size.width / 2;
-    final barW = (slot * 0.46).clamp(0.0, 96.0);
-    final cx1 = slot * 0.5, cx2 = slot * 1.5;
-
-    void seg(double cx, double from, double to, Color c) {
-      canvas.drawRect(
-        Rect.fromLTRB(cx - barW / 2, y(to), cx + barW / 2, y(from)),
-        Paint()..color = c,
-      );
-    }
-
-    // Cost bar.
-    seg(cx1, 0, cost, costColor);
-    // Value bar: cost + income, then gain (up) or loss (down).
-    seg(cx2, 0, cost, costColor);
-    seg(cx2, cost, topCI, incomeColor);
-    if (gain >= 0) {
-      seg(cx2, topCI, nav, gainCol);
-    } else {
-      seg(cx2, nav, topCI, lossCol); // the drop from income top down to nav
-    }
-    // Tax taken: translucent cap over the top `tax` of the value, + a dashed
-    // line marking the kept (after-tax) value.
-    if (tax > 0) {
-      seg(cx2, netValue, nav, lossCol.withValues(alpha: 0.30));
-      _dashed(canvas, y(netValue), cx2 - barW / 2, cx2 + barW / 2, lossCol);
-    }
-
-    // Value labels above each bar.
-    _center(canvas, _money0(cost), cx1, y(cost) - valueH + 1, textColor, 11);
-    final valTop = gain >= 0 ? nav : topCI;
-    _center(
-      canvas,
-      _money0(netValue),
-      cx2,
-      y(valTop) - valueH + 1,
-      textColor,
-      11,
+    // Faint zero baseline behind the bars.
+    canvas.drawLine(
+      Offset(xZero, 2),
+      Offset(xZero, size.height - 2),
+      Paint()
+        ..color = zero
+        ..strokeWidth = 1,
     );
 
-    // Category labels under each bar.
-    final catY = size.height - labelH - legendH + 2;
-    _center(canvas, 'Cost', cx1, catY, mutedColor, 11);
-    _center(canvas, 'Value (after tax)', cx2, catY, mutedColor, 11);
+    for (var i = 0; i < n; i++) {
+      final r = rows[i];
+      final cy = i * rowH + rowH / 2;
+      final color = r.value >= 0 ? gain : loss;
+      final barH = (rowH * 0.46).clamp(7.0, 16.0);
 
-    // Legend: colour key for the value-bar segments.
-    final items = <(Color, String)>[
-      (costColor, 'Cost'),
-      (incomeColor, 'Income'),
-      (gain >= 0 ? gainCol : lossCol, gain >= 0 ? 'Gain' : 'Loss'),
-      if (tax > 0) (lossCol.withValues(alpha: 0.30), 'Tax'),
-    ];
-    _legend(canvas, size, items, size.height - legendH + 4, mutedColor);
-  }
+      // Separator above the net (summary) row.
+      if (r.isNet) {
+        canvas.drawLine(
+          Offset(0, i * rowH),
+          Offset(size.width, i * rowH),
+          Paint()
+            ..color = zero
+            ..strokeWidth = 1,
+        );
+      }
 
-  void _dashed(Canvas canvas, double yy, double x0, double x1, Color c) {
-    final paint = Paint()
-      ..color = c
-      ..strokeWidth = 1.2;
-    const dash = 4.0, gap = 3.0;
-    var x = x0;
-    while (x < x1) {
-      canvas.drawLine(
-        Offset(x, yy),
-        Offset((x + dash).clamp(x0, x1), yy),
-        paint,
+      // Bar from the zero line out to the value.
+      final x1 = xOf(r.value);
+      final rect = Rect.fromLTRB(
+        x1 < xZero ? x1 : xZero,
+        cy - barH / 2,
+        x1 < xZero ? xZero : x1,
+        cy + barH / 2,
       );
-      x += dash + gap;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(2)),
+        Paint()..color = r.isNet ? color : color.withValues(alpha: 0.85),
+      );
+
+      // Label (left column) and value (right column).
+      _text(
+        canvas,
+        r.label,
+        0,
+        labelW - 8,
+        cy,
+        r.isNet ? textColor : mutedColor,
+        bold: r.isNet,
+        alignRight: false,
+      );
+      _text(
+        canvas,
+        _signedMoney(r.value),
+        size.width - valueW,
+        valueW,
+        cy,
+        color,
+        bold: r.isNet,
+        alignRight: true,
+      );
     }
   }
 
-  void _center(
+  void _text(
     Canvas canvas,
-    String text,
-    double cx,
-    double top,
-    Color color,
-    double size,
-  ) {
+    String s,
+    double left,
+    double width,
+    double cy,
+    Color color, {
+    required bool bold,
+    required bool alignRight,
+  }) {
     final tp = TextPainter(
       text: TextSpan(
-        text: text,
-        style: TextStyle(color: color, fontSize: size),
+        text: s,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
-      textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
       maxLines: 1,
       ellipsis: '…',
-    )..layout(maxWidth: 140);
-    tp.paint(canvas, Offset(cx - tp.width / 2, top));
-  }
-
-  void _legend(
-    Canvas canvas,
-    Size size,
-    List<(Color, String)> items,
-    double top,
-    Color color,
-  ) {
-    const sw = 10.0, padTxt = 4.0, padItem = 12.0;
-    // Measure to centre the whole row.
-    final tps = <TextPainter>[];
-    var total = 0.0;
-    for (final it in items) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: it.$2,
-          style: TextStyle(color: color, fontSize: 10),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tps.add(tp);
-      total += sw + padTxt + tp.width + padItem;
-    }
-    total -= padItem;
-    var x = (size.width - total) / 2;
-    for (var i = 0; i < items.length; i++) {
-      canvas.drawRect(
-        Rect.fromLTWH(x, top + 1, sw, sw),
-        Paint()..color = items[i].$1,
-      );
-      x += sw + padTxt;
-      tps[i].paint(canvas, Offset(x, top));
-      x += tps[i].width + padItem;
-    }
+    )..layout(maxWidth: width);
+    final dx = alignRight ? left + width - tp.width : left;
+    tp.paint(canvas, Offset(dx, cy - tp.height / 2));
   }
 
   @override
-  bool shouldRepaint(_ReturnBarsPainter old) =>
-      old.cost != cost ||
-      old.income != income ||
-      old.gain != gain ||
-      old.tax != tax;
+  bool shouldRepaint(_ReturnBarsPainter old) => old.rows != rows;
 }
 
 class _StatusChip extends StatelessWidget {

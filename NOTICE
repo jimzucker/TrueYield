@@ -26,6 +26,13 @@ This product uses the following third-party components:
 
   - url_launcher (Dart package) — © Flutter authors, BSD 3-Clause License.
 
+  - cupertino_icons (Dart package, ships the Cupertino icon font in the app)
+    — © 2016 Vladimir Kharlampidi, MIT License.
+
+The full license texts of the bundled third-party components above are
+reproduced under LICENSES/, and are also shown in-app via the license page
+(Info tab), which additionally lists their transitive dependencies.
+
 Build/refresh tooling (under tools/, used to generate the bundled datasets and
 in CI — NOT shipped in the application binary):
 

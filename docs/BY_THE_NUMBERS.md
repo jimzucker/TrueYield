@@ -22,7 +22,7 @@ Two scopes, kept honest:
 
 ## Effort actually spent (last ~3 weeks)
 
-- **~20 hours genuine hands-on** (range 18–22h), adjusted down ~35% because this
+- **~15 hours genuine hands-on** (range 14–17h), adjusted down ~50% because this
   window was split across multiple apps — across **10 active days**
 - **7.2 million output tokens** across **~6,700 assistant turns** (Opus 4.8),
   including 28 sub-agent runs
@@ -43,7 +43,7 @@ Two scopes, kept honest:
 ## Bottom line
 
 ~11,700 lines of shipped, test-backed code across four build targets, delivered
-with ~20 hours of hands-on steering and ~$100 of subscription — because long,
+with ~15 hours of hands-on steering and ~$100 of subscription — because long,
 context-heavy coding (a 1M-token window re-read 6,700 times) is exactly where AI
 assistance and a flat-rate plan compound: 99.97% of the token volume was cache
 reads billed at a tenth of input price.
@@ -59,6 +59,6 @@ reads billed at a tenth of input price.
   dirs, including the 28 sub-agent transcripts. Output/cache/input token totals
   are summed from each assistant turn's `usage`. Hands-on hours are the sum of
   inter-event gaps capped at 10 min (a gap over the cap counts as a break), then
-  reduced 35% for multi-app context-switching during the window.
+  reduced 50% for multi-app context-switching during the window.
 - **Cost** — API-equivalent priced at Opus 4.8 rates: input $5.00, output
   $25.00, cache-write-5m $6.25 (1.25×), cache-read $0.50 (0.1×) per MTok.

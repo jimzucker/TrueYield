@@ -1,5 +1,17 @@
 # TrueYield × Claude Code — by the numbers
 
+## Bottom line
+
+**~11,700 lines of shipped, test-backed code** across four build targets
+(iOS · Android · macOS · web), delivered with **~15 hours of hands-on steering**
+and **~$100 of subscription**. The same workload on the pay-as-you-go API would
+have cost **≈ $1,330** — **~13× more** than the flat-rate plan — because long,
+context-heavy coding (a 1M-token window re-read ~6,700 times) is exactly where AI
+assistance and a flat-rate plan compound: **99.97% of the token volume was cache
+reads**, billed at a tenth of input price.
+
+---
+
 Two scopes, kept honest:
 
 - **Code volume** = the full git history of the app (scaffold → today, one Flutter
@@ -27,7 +39,7 @@ Two scopes, kept honest:
 - **7.2 million output tokens** across **~6,700 assistant turns** (Opus 4.8),
   including 28 sub-agent runs
 
-## Cost — the headline
+## Cost
 
 - Subscriptions are flat-rate, not metered. The same workload on the
   pay-as-you-go API would be **≈ $1,330** — **~$1,015 of it cache reads** (the
@@ -39,14 +51,6 @@ Two scopes, kept honest:
 - The **$20 → $100 Max upgrade was the right call**: the June 12 push alone was
   62 commits in one day — the bulk of that 2-billion-token cache-read load — and
   would have rate-limited on the $20 tier.
-
-## Bottom line
-
-~11,700 lines of shipped, test-backed code across four build targets, delivered
-with ~15 hours of hands-on steering and ~$100 of subscription — because long,
-context-heavy coding (a 1M-token window re-read 6,700 times) is exactly where AI
-assistance and a flat-rate plan compound: 99.97% of the token volume was cache
-reads billed at a tenth of input price.
 
 ---
 

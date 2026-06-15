@@ -5,7 +5,7 @@
 // that year's 19a-1 estimates. The app applies this single figure to a
 // finished year and the live per-distribution values to the current one.
 //
-// As of: 2026-06-12
+// As of: 2026-06-15
 
 /// Ticker -> {completed calendar year -> return-of-capital %}.
 const Map<String, Map<int, double>> kRocAnnualByTickerYear = {
@@ -101,7 +101,7 @@ const Map<String, Map<int, double>> kRocAnnualByTickerYear = {
   'SPYI': {2022: 90.4, 2023: 92.2, 2024: 95.4, 2025: 97.1},
   'SQY': {2024: 61.8},
   'SRHR': {2024: 0.0, 2025: 0.0},
-  'TLTP': {2025: 69.7},
+  'TLTP': {2025: 70.3},
   'TSLY': {2024: 100.0, 2025: 73.0},
   'TSMY': {2024: 45.0, 2025: 23.4},
   'TSPY': {2025: 95.6},

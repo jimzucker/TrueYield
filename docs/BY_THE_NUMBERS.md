@@ -5,8 +5,8 @@
 **~11,700 lines of shipped, test-backed code** across four build targets
 (iOS · Android · macOS · web), delivered with **~15 hours of hands-on steering**
 and **~$100 of subscription**. The same workload on the pay-as-you-go API would
-have cost **≈ $1,330** — **~13× more** than the flat-rate plan — because long,
-context-heavy coding (a 1M-token window re-read ~6,700 times) is exactly where AI
+have cost **≈ $1,340** — **~13× more** than the flat-rate plan — because long,
+context-heavy coding (a 1M-token window re-read ~6,800 times) is exactly where AI
 assistance and a flat-rate plan compound: **99.97% of the token volume was cache
 reads**, billed at a tenth of input price.
 
@@ -16,7 +16,7 @@ Two scopes, kept honest:
 
 - **Code volume** = the full git history of the app (scaffold → today, one Flutter
   codebase).
-- **Time & cost** = the ~3 weeks captured in local transcripts (May 26 → Jun 14
+- **Time & cost** = the ~3 weeks captured in local transcripts (May 26 → Jun 16
   2026, iYield rename → TrueYield v1.8). The pre-rename scaffolding days predate
   these logs, so the effort figures are a **floor**.
 
@@ -30,21 +30,21 @@ Two scopes, kept honest:
 - Plus **~2,500 lines of generated** ROC/price data tables (and larger JSON
   datasets) bootstrapped for 40+ funds — counted separately because they're
   machine-written, not hand-authored
-- **96 commits** over the window
+- **100 commits** over the window
 
 ## Effort actually spent (last ~3 weeks)
 
-- **~15 hours genuine hands-on** (range 14–17h), adjusted down ~50% because this
-  window was split across multiple apps — across **10 active days**
-- **7.2 million output tokens** across **~6,700 assistant turns** (Opus 4.8),
+- **~16 hours genuine hands-on** (range 14–17h), adjusted down ~50% because this
+  window was split across multiple apps — across **11 active days**
+- **7.2 million output tokens** across **~6,800 assistant turns** (Opus 4.8),
   including 28 sub-agent runs
 
 ## Cost
 
 - Subscriptions are flat-rate, not metered. The same workload on the
-  pay-as-you-go API would be **≈ $1,330** — **~$1,015 of it cache reads** (the
-  full 1M-token context re-read every turn: **2.03 billion** cache-read tokens).
-- Breakdown: cache reads $1,015 (76%) · output $180 · cache writes $129 · fresh
+  pay-as-you-go API would be **≈ $1,340** — **~$1,020 of it cache reads** (the
+  full 1M-token context re-read every turn: **2.04 billion** cache-read tokens).
+- Breakdown: cache reads $1,020 (76%) · output $181 · cache writes $136 · fresh
   input $4.
 - Actual spend: **~$100** ($20 Pro → $100 Max) → **~13× more compute than the
   cash cost.**

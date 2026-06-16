@@ -332,7 +332,13 @@ List<DiagnosticScenario> buildDiagnostics(DateTime now) {
 
   final barsUp = barsFor(rising);
   final barsDown = barsFor(falling);
-  DateTime ago(int m) => DateTime.utc(today.year, today.month - m, today.day);
+  // Buy dates anchor to the 1st — the same day-of-month as the price bars and
+  // safely before the 15th-of-month distributions. Using today.day instead made
+  // the captured-distribution count flip whenever today fell after the 15th
+  // (a buy on the 16th misses that month's distribution), so the pinned expected
+  // values only held on days 1–15. Anchoring to day 1 keeps the scenario truly
+  // date-independent, as the doc comment above promises.
+  DateTime ago(int m) => DateTime.utc(today.year, today.month - m, 1);
 
   YieldResult run(List<Lot>? lots, {List<PriceBar>? bars}) => YieldMath.compute(
     ticker: 'DIAG',

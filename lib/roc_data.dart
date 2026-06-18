@@ -5,9 +5,9 @@
 // are estimates; rerun the script to refresh. See the project-roc-autofetch
 // memory for the source/approach.
 //
-// As of: 2026-06-17
+// As of: 2026-06-18
 
-const String kRocDataAsOf = '2026-06-17';
+const String kRocDataAsOf = '2026-06-18';
 
 /// Ticker -> trailing return-of-capital %, used to auto-fill the ROC field
 /// when a known YieldMax fund is entered.
@@ -20,7 +20,7 @@ const Map<String, double> kRocByTicker = {
   'AMZY': 19.3,
   'APLY': 23.9,
   'BRKC': 15.7,
-  'BTCI': 94.5,
+  'BTCI': 94.2,
   'BUYW': 0.0,
   'CONY': 47.3,
   'CRCO': 85.9,
@@ -29,7 +29,7 @@ const Map<String, double> kRocByTicker = {
   'CVRD': 0.0,
   'DIPS': 36.5,
   'DISO': 41.0,
-  'DIVO': 67.6,
+  'DIVO': 68.2,
   'DJIA': 89.6,
   'DRAY': 81.1,
   'EIPI': 21.1,
@@ -49,13 +49,13 @@ const Map<String, double> kRocByTicker = {
   'HIYY': 55.0,
   'HOOY': 47.1,
   'HYGW': 24.1,
-  'IAUI': 89.1,
+  'IAUI': 88.1,
   'IFLR': 0.0,
   'IQQQ': 92.3,
   'ISPY': 80.1,
   'ITWO': 87.7,
   'IVVW': 63.8,
-  'IWMI': 94.7,
+  'IWMI': 96.3,
   'IWMW': 81.8,
   'JEPI': 0.0,
   'JEPQ': 0.0,
@@ -69,9 +69,9 @@ const Map<String, double> kRocByTicker = {
   'MLPD': 73.7,
   'MRNY': 37.0,
   'MSTY': 78.0,
-  'NEHI': 96.0,
+  'NEHI': 95.6,
   'NFLY': 8.0,
-  'NIHI': 87.5,
+  'NIHI': 75.0,
   'NVDY': 17.1,
   'OARK': 39.2,
   'OEI': 99.3,
@@ -82,7 +82,7 @@ const Map<String, double> kRocByTicker = {
   'QDTE': 100.0,
   'QDTY': 38.3,
   'QDVO': 97.6,
-  'QQQI': 99.4,
+  'QQQI': 99.1,
   'QYLD': 99.0,
   'QYLG': 96.0,
   'RBLY': 72.8,
@@ -95,9 +95,9 @@ const Map<String, double> kRocByTicker = {
   'SLTY': 84.2,
   'SMCY': 16.1,
   'SNOY': 31.7,
-  'SPYI': 96.9,
+  'SPYI': 96.2,
   'SRHR': 0.0,
-  'TDAQ': 99.2,
+  'TDAQ': 99.4,
   'TLTP': 67.8,
   'TLTW': 42.9,
   'TSLY': 16.8,

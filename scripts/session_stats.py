@@ -363,34 +363,67 @@ def main() -> None:
         print(f"Wrote {args.md}")
         return
 
-    print(f"Transcripts: {len(files)} file(s), {len(rows):,} records\n")
-    print("TOKENS")
-    print(f"  Output (generated)   {outp:>15,}")
-    print(f"  Input (uncached)     {inp:>15,}")
-    print(f"  Cache write          {cc:>15,}")
-    print(f"  Cache read           {cr:>15,}")
-    print(f"  Grand total          {total:>15,}\n")
-    print("ACTIVITY")
-    print(f"  Human prompts        {prompts:>15,}")
-    print(f"  Assistant turns      {assistant_turns:>15,}\n")
-    if events:
-        print("TIME")
-        print(f"  Session start        {events[0].astimezone():%Y-%m-%d %H:%M %Z}")
-        print(f"  Session end          {events[-1].astimezone():%Y-%m-%d %H:%M %Z}")
-        print(f"  Active (gaps <{args.idle:g}m)   {hms(active)}")
-        print(f"    Claude working     {hms(claude)}")
-        print(f"    User prompting     {hms(user)}")
-        print(f"  Idle (excluded)      {hms(idle)}\n")
+    # --- canonical summary (identical layout in every repo; relay verbatim) ---
+    def k(n: int) -> str:
+        """Compact magnitude, e.g. 6,372,888 -> '6.4M'."""
+        for div, suf in ((1e9, "B"), (1e6, "M"), (1e3, "k")):
+            if n >= div:
+                return f"{n / div:.1f}{suf}"
+        return str(n)
+
+    note = ""
+    extras = []
+    if any(f"{os.sep}subagents{os.sep}" in f for f in files):
+        extras.append("incl. subagents")
+    if ALIAS_PROJECT_DIRS or args.also:
+        extras.append("pre-rename history")
+    if extras:
+        note = " (" + " + ".join(extras) + ")"
 
     c = costs(outp, inp, cc, cr, rates)
-    print("COST (metered API, official Opus 4.8 rates, verified 2026-06)")
-    print(f"  Output      @ ${rates['output']:>6.2f}/M   ${c['output']:>10,.2f}")
-    print(f"  Input       @ ${rates['input']:>6.2f}/M   ${c['input']:>10,.2f}")
-    print(f"  Cache write @ ${rates['cache_write']:>6.2f}/M   ${c['cache_write']:>10,.2f}")
-    print(f"  Cache read  @ ${rates['cache_read']:>6.2f}/M   ${c['cache_read']:>10,.2f}")
-    print(f"  Total                       ${c['total']:>10,.2f}")
-    print(f"  Caching saved ~${c['cache_savings']:,.0f} vs. uncached "
-          f"(~${c['nocache_reads']:,.0f})")
+    cr_pct = f"{cr / total * 100:.0f}%" if total else "0%"
+    bar = "─" * 52
+    out = [
+        bar,
+        f" {project_name()} · Claude Code build session",
+        bar,
+        f" {len(files)} transcripts{note} · {len(rows):,} records",
+        "",
+        " TOKENS",
+        f"   Output (generated)  {outp:>15,}   {k(outp)}",
+        f"   Cache read          {cr:>15,}   {k(cr)}  {cr_pct}",
+        f"   Cache write         {cc:>15,}   {k(cc)}",
+        f"   Input (uncached)    {inp:>15,}   {k(inp)}",
+        f"   Total               {total:>15,}   {k(total)}",
+        "",
+        " ACTIVITY",
+        f"   Human prompts       {prompts:>15,}",
+        f"   Assistant turns     {assistant_turns:>15,}",
+    ]
+    if events:
+        s, e = events[0].astimezone(), events[-1].astimezone()
+        out += [
+            "",
+            f" TIME  (idle gaps >{args.idle:g}m excluded)",
+            f"   Span                {s:%b %-d} → {e:%b %-d %Y}",
+            f"   Active              {hms(active):>15}   "
+            f"(Claude {hms(claude)} · you {hms(user)})",
+        ]
+    out += [
+        "",
+        " COST  (metered-API equivalent · Opus 4.8 rates)",
+        f"   Output      @ ${rates['output']:>5.2f}/M   ${c['output']:>10,.2f}",
+        f"   Cache write @ ${rates['cache_write']:>5.2f}/M   ${c['cache_write']:>10,.2f}",
+        f"   Cache read  @ ${rates['cache_read']:>5.2f}/M   ${c['cache_read']:>10,.2f}",
+        f"   Input       @ ${rates['input']:>5.2f}/M   ${c['input']:>10,.2f}",
+        f"   {'-' * 34}",
+        f"   Total                    ${c['total']:>10,.2f}",
+        f"   Caching saved ~${c['cache_savings']:,.0f} vs. uncached",
+        bar,
+        " Metered-API equivalent — on a flat Claude Code subscription this",
+        " build is effectively included, not a billed charge.",
+    ]
+    print("\n".join(out))
 
 
 if __name__ == "__main__":

@@ -363,65 +363,61 @@ def main() -> None:
         print(f"Wrote {args.md}")
         return
 
-    # --- canonical summary (identical layout in every repo; relay verbatim) ---
-    def k(n: int) -> str:
-        """Compact magnitude, e.g. 6,372,888 -> '6.4M'."""
-        for div, suf in ((1e9, "B"), (1e6, "M"), (1e3, "k")):
+    # --- friendly summary (identical layout in every repo; relay verbatim) ---
+    def mag(n: int) -> str:
+        """3 significant figures with a B/M/K suffix, e.g. 6,229,729 -> '6.23M'."""
+        for div, suf in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
             if n >= div:
-                return f"{n / div:.1f}{suf}"
-        return str(n)
+                v = n / div
+                dp = 0 if v >= 100 else (1 if v >= 10 else 2)
+                return f"{v:.{dp}f}{suf}"
+        return f"{n:,}"
 
-    note = ""
+    def hm(td: dt.timedelta) -> str:
+        s = int(td.total_seconds())
+        return f"{s // 3600}h {s % 3600 // 60:02d}m"
+
     extras = []
     if any(f"{os.sep}subagents{os.sep}" in f for f in files):
         extras.append("incl. subagents")
     if ALIAS_PROJECT_DIRS or args.also:
         extras.append("pre-rename history")
-    if extras:
-        note = " (" + " + ".join(extras) + ")"
+    note = f" ({', '.join(extras)})" if extras else ""
 
     c = costs(outp, inp, cc, cr, rates)
     cr_pct = f"{cr / total * 100:.0f}%" if total else "0%"
-    bar = "─" * 52
     out = [
-        bar,
-        f" {project_name()} · Claude Code build session",
-        bar,
-        f" {len(files)} transcripts{note} · {len(rows):,} records",
+        f"📊 Session stats — {project_name()}",
+        f"_{len(files)} transcripts{note} · {len(rows):,} records_",
         "",
-        " TOKENS",
-        f"   Output (generated)  {outp:>15,}   {k(outp)}",
-        f"   Cache read          {cr:>15,}   {k(cr)}  {cr_pct}",
-        f"   Cache write         {cc:>15,}   {k(cc)}",
-        f"   Input (uncached)    {inp:>15,}   {k(inp)}",
-        f"   Total               {total:>15,}   {k(total)}",
+        f"Tokens — {mag(total)} total",
+        f"- Output (generated): {mag(outp)}",
+        f"- Cache read: {mag(cr)} ({cr_pct})",
+        f"- Cache write: {mag(cc)} · Input: {mag(inp)}",
         "",
-        " ACTIVITY",
-        f"   Human prompts       {prompts:>15,}",
-        f"   Assistant turns     {assistant_turns:>15,}",
+        "Activity",
+        f"- Human prompts: {prompts:,}",
+        f"- Assistant turns: {assistant_turns:,}",
     ]
     if events:
         s, e = events[0].astimezone(), events[-1].astimezone()
         out += [
             "",
-            f" TIME  (idle gaps >{args.idle:g}m excluded)",
-            f"   Span                {s:%b %-d} → {e:%b %-d %Y}",
-            f"   Active              {hms(active):>15}   "
-            f"(Claude {hms(claude)} · you {hms(user)})",
+            f"Time (idle >{args.idle:g}m excluded)",
+            f"- Active: {hm(active)} — Claude working {hm(claude)} · "
+            f"you prompting {hm(user)}",
+            f"- Span: {s:%Y-%m-%d} → {e:%Y-%m-%d}",
         ]
     out += [
         "",
-        " COST  (metered-API equivalent · Opus 4.8 rates)",
-        f"   Output      @ ${rates['output']:>5.2f}/M   ${c['output']:>10,.2f}",
-        f"   Cache write @ ${rates['cache_write']:>5.2f}/M   ${c['cache_write']:>10,.2f}",
-        f"   Cache read  @ ${rates['cache_read']:>5.2f}/M   ${c['cache_read']:>10,.2f}",
-        f"   Input       @ ${rates['input']:>5.2f}/M   ${c['input']:>10,.2f}",
-        f"   {'-' * 34}",
-        f"   Total                    ${c['total']:>10,.2f}",
-        f"   Caching saved ~${c['cache_savings']:,.0f} vs. uncached",
-        bar,
-        " Metered-API equivalent — on a flat Claude Code subscription this",
-        " build is effectively included, not a billed charge.",
+        "Cost (metered-API equivalent, Opus 4.8 rates)",
+        f"- ${c['total']:,.2f} — cache read ${c['cache_read']:,.0f} · "
+        f"cache write ${c['cache_write']:,.0f} · output ${c['output']:,.0f} · "
+        f"input ${c['input']:,.0f}",
+        f"- Caching saved ~${c['cache_savings']:,.0f} vs. uncached",
+        "",
+        "_On a flat Claude Code subscription this build is effectively "
+        "included — the figure above is the metered pay-as-you-go equivalent._",
     ]
     print("\n".join(out))
 

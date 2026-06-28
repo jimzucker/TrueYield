@@ -35,10 +35,9 @@ DEFAULT_IDLE_MIN = 5
 
 # Prior encoded project-dir names to fold in alongside this repo's own dir, so
 # the stats span the whole project history rather than just the current path.
-# Repo-specific config: this project was renamed iyield -> TrueYield mid-build,
-# and Claude Code keys transcripts by path, so the pre-rename sessions live under
-# the old encoded name. Leave empty ([]) when dropping this script into a repo
-# that was never renamed. Override at runtime with --also NAME (repeatable).
+# Set this only when a repo was renamed mid-build (Claude Code keys transcripts
+# by path, so pre-rename sessions live under the old encoded name); leave empty
+# ([]) for a repo that kept its name. Override at runtime with --also NAME.
 ALIAS_PROJECT_DIRS = [
     "-Users-jimzucker-code-GitHub-iyield",  # pre-rename: iyield -> TrueYield
 ]

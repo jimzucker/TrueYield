@@ -5,7 +5,7 @@
 // that year's 19a-1 estimates. The app applies this single figure to a
 // finished year and the live per-distribution values to the current one.
 //
-// As of: 2026-07-02
+// As of: 2026-07-03
 
 /// Ticker -> {completed calendar year -> return-of-capital %}.
 const Map<String, Map<int, double>> kRocAnnualByTickerYear = {
@@ -27,7 +27,7 @@ const Map<String, Map<int, double>> kRocAnnualByTickerYear = {
   'CVRD': {2024: 0.0, 2025: 0.0},
   'DIPS': {2024: 53.5, 2025: 100.0},
   'DISO': {2024: 89.0, 2025: 100.0},
-  'DIVO': {2023: 48.5, 2024: 62.5, 2025: 80.4},
+  'DIVO': {2023: 48.5, 2024: 62.2, 2025: 79.4},
   'DJIA': {2022: 51.6, 2023: 77.4, 2024: 82.0, 2025: 85.7},
   'DRAY': {2025: 94.6},
   'FBY': {2024: 19.6, 2025: 63.1},
@@ -48,7 +48,7 @@ const Map<String, Map<int, double>> kRocAnnualByTickerYear = {
   'JEPI': {2020: 0.0, 2021: 0.0, 2022: 0.0, 2023: 0.0, 2024: 0.0, 2025: 0.0},
   'JEPQ': {2022: 0.0, 2023: 0.0, 2024: 0.0, 2025: 0.0},
   'JPMO': {2024: 60.4, 2025: 36.6},
-  'KLIP': {2024: 94.8, 2025: 100.0},
+  'KLIP': {2024: 94.8, 2025: 91.4},
   'LFGY': {2025: 64.7},
   'MAGY': {2025: 100.0},
   'MARO': {2025: 97.0},
@@ -66,7 +66,7 @@ const Map<String, Map<int, double>> kRocAnnualByTickerYear = {
   'PYPY': {2024: 7.6, 2025: 100.0},
   'QDTE': {2024: 100.0, 2025: 100.0},
   'QDTY': {2025: 28.2},
-  'QDVO': {2025: 97.7},
+  'QDVO': {2024: 95.7, 2025: 97.7},
   'QQQI': {2024: 98.6, 2025: 99.3},
   'QYLD': {
     2016: 29.0,

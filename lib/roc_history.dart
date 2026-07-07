@@ -5,9 +5,9 @@
 // (seconds, UTC midnight). Used to pre-fill the Distributions-tab
 // per-distribution ROC. See the project-roc-autofetch memory.
 //
-// As of: 2026-07-06
+// As of: 2026-07-07
 
-const String kRocHistoryAsOf = '2026-07-06';
+const String kRocHistoryAsOf = '2026-07-07';
 
 /// Ticker -> {payable-date epoch (s) -> return-of-capital %}.
 const Map<String, Map<int, double>> kRocByTickerByEpoch = {
@@ -152,6 +152,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1774483200: 0.0,
     1776902400: 0.0,
     1779321600: 0.0,
+    1782345600: 0.0,
   },
   'CHPY': {
     1775692800: 94.7,
@@ -475,6 +476,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1775606400: 60.0,
     1778112000: 34.0,
     1780617600: 0.0,
+    1783468800: 0.0,
   },
   'IAUI': {
     1750982400: 92.0,
@@ -491,7 +493,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1779408000: 86.0,
     1781740800: 84.2,
   },
-  'IFLR': {1774915200: 0.0},
+  'IFLR': {1774915200: 0.0, 1782777600: 0.0},
   'IQQQ': {
     1715126400: 96.2,
     1717977600: 94.1,
@@ -565,6 +567,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1775606400: 20.0,
     1778112000: 100.0,
     1780617600: 100.0,
+    1783468800: 76.0,
   },
   'IWMI': {
     1719446400: 100.0,
@@ -602,6 +605,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1775606400: 89.0,
     1778112000: 100.0,
     1780617600: 100.0,
+    1783468800: 87.0,
   },
   'JEPI': {
     1593561600: 0.0,
@@ -787,6 +791,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1775606400: 42.0,
     1778112000: 0.0,
     1780617600: 14.0,
+    1783468800: 18.0,
   },
   'MAGY': {
     1746748800: 100.0,
@@ -1717,6 +1722,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1774483200: 0.0,
     1776902400: 0.0,
     1779321600: 0.0,
+    1782345600: 0.0,
   },
   'TDAQ': {
     1761091200: 99.0,
@@ -1756,6 +1762,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1775606400: 7.0,
     1778112000: 0.0,
     1780617600: 61.0,
+    1783468800: 42.0,
   },
   'TSLY': {
     1761264000: 56.7,

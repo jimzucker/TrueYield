@@ -5,9 +5,9 @@
 // are estimates; rerun the script to refresh. See the project-roc-autofetch
 // memory for the source/approach.
 //
-// As of: 2026-07-06
+// As of: 2026-07-08
 
-const String kRocDataAsOf = '2026-07-06';
+const String kRocDataAsOf = '2026-07-08';
 
 /// Ticker -> trailing return-of-capital %, used to auto-fill the ROC field
 /// when a known YieldMax fund is entered.
@@ -49,21 +49,21 @@ const Map<String, double> kRocByTicker = {
   'GPTY': 54.4,
   'HIYY': 55.0,
   'HOOY': 47.1,
-  'HYGW': 24.1,
+  'HYGW': 18.1,
   'IAUI': 88.1,
   'IFLR': 0.0,
   'IQQQ': 92.3,
   'ISPY': 80.1,
   'ITWO': 87.7,
-  'IVVW': 63.8,
+  'IVVW': 60.8,
   'IWMI': 96.3,
-  'IWMW': 81.8,
+  'IWMW': 82.0,
   'JEPI': 0.0,
   'JEPQ': 0.0,
   'JPMO': 29.9,
   'KLIP': 87.5,
   'LFGY': 63.0,
-  'LQDW': 46.4,
+  'LQDW': 39.4,
   'MAGY': 100.0,
   'MARO': 57.9,
   'MDST': 87.5,
@@ -100,7 +100,7 @@ const Map<String, double> kRocByTicker = {
   'SRHR': 0.0,
   'TDAQ': 99.4,
   'TLTP': 67.8,
-  'TLTW': 42.9,
+  'TLTW': 39.2,
   'TSLY': 16.8,
   'TSMY': 30.0,
   'TSPY': 94.8,

@@ -5,9 +5,9 @@
 // (seconds, UTC midnight). Used to pre-fill the Distributions-tab
 // per-distribution ROC. See the project-roc-autofetch memory.
 //
-// As of: 2026-07-30
+// As of: 2026-07-31
 
-const String kRocHistoryAsOf = '2026-07-30';
+const String kRocHistoryAsOf = '2026-07-31';
 
 /// Ticker -> {payable-date epoch (s) -> return-of-capital %}.
 const Map<String, Map<int, double>> kRocByTickerByEpoch = {
@@ -334,6 +334,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1777507200: 0.0,
     1780012800: 0.0,
     1782777600: 0.0,
+    1785456000: 0.0,
   },
   'FBY': {
     1761264000: 26.3,
@@ -435,6 +436,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1777507200: 93.4,
     1780012800: 94.0,
     1782777600: 91.9,
+    1785456000: 93.0,
   },
   'FTQI': {
     1769731200: 100.0,
@@ -443,6 +445,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1777507200: 98.4,
     1780012800: 98.5,
     1782777600: 98.1,
+    1785456000: 98.5,
   },
   'GDXY': {
     1761264000: 93.8,
@@ -1195,6 +1198,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1783555200: 100.0,
     1784160000: 100.0,
     1784764800: 100.0,
+    1785369600: 100.0,
   },
   'QDTY': {
     1766016000: 19.3,
@@ -1566,6 +1570,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1783555200: 100.0,
     1784160000: 100.0,
     1784764800: 100.0,
+    1785369600: 100.0,
   },
   'RDTY': {
     1766016000: 100.0,
@@ -2071,6 +2076,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1783555200: 100.0,
     1784160000: 100.0,
     1784764800: 100.0,
+    1785369600: 100.0,
   },
   'XOMO': {
     1761264000: 40.3,

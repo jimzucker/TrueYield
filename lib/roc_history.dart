@@ -5,9 +5,9 @@
 // (seconds, UTC midnight). Used to pre-fill the Distributions-tab
 // per-distribution ROC. See the project-roc-autofetch memory.
 //
-// As of: 2026-08-10
+// As of: 2026-08-11
 
-const String kRocHistoryAsOf = '2026-08-10';
+const String kRocHistoryAsOf = '2026-08-11';
 
 /// Ticker -> {payable-date epoch (s) -> return-of-capital %}.
 const Map<String, Map<int, double>> kRocByTickerByEpoch = {
@@ -52,6 +52,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1784160000: 100.0,
     1784764800: 100.0,
     1785369600: 100.0,
+    1785974400: 100.0,
   },
   'AIYY': {
     1761264000: 78.1,
@@ -404,6 +405,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1784160000: 100.0,
     1784764800: 100.0,
     1785369600: 100.0,
+    1785974400: 100.0,
   },
   'FIAT': {
     1761264000: 96.7,

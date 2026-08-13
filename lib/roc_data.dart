@@ -5,9 +5,9 @@
 // are estimates; rerun the script to refresh. See the project-roc-autofetch
 // memory for the source/approach.
 //
-// As of: 2026-08-12
+// As of: 2026-08-13
 
-const String kRocDataAsOf = '2026-08-12';
+const String kRocDataAsOf = '2026-08-13';
 
 /// Ticker -> trailing return-of-capital %, used to auto-fill the ROC field
 /// when a known YieldMax fund is entered.

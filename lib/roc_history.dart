@@ -5,9 +5,9 @@
 // (seconds, UTC midnight). Used to pre-fill the Distributions-tab
 // per-distribution ROC. See the project-roc-autofetch memory.
 //
-// As of: 2026-08-26
+// As of: 2026-08-28
 
-const String kRocHistoryAsOf = '2026-08-26';
+const String kRocHistoryAsOf = '2026-08-28';
 
 /// Ticker -> {payable-date epoch (s) -> return-of-capital %}.
 const Map<String, Map<int, double>> kRocByTickerByEpoch = {
@@ -502,6 +502,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1784764800: 96.5,
     1785369600: 0.0,
     1785974400: 0.0,
+    1787184000: 97.0,
   },
   'HIYY': {
     1761264000: 99.8,
@@ -855,6 +856,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1784764800: 61.2,
     1785369600: 77.7,
     1785974400: 0.0,
+    1787184000: 100.0,
   },
   'LQDW': {
     1762473600: 74.0,
@@ -1255,6 +1257,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1784764800: 0.8,
     1785369600: 13.9,
     1785974400: 0.0,
+    1787184000: 91.4,
   },
   'QDVO': {
     1727654400: 92.9,
@@ -1634,6 +1637,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1784764800: 1.0,
     1785369600: 100.0,
     1785974400: 0.0,
+    1787184000: 14.0,
   },
   'RDYY': {
     1761264000: 81.9,
@@ -1751,6 +1755,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1784764800: 28.2,
     1785369600: 24.9,
     1785974400: 0.0,
+    1787184000: 49.7,
   },
   'SLJY': {
     1759190400: 99.7,
@@ -1787,6 +1792,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1784764800: 95.8,
     1785369600: 78.2,
     1785974400: 97.1,
+    1787184000: 95.2,
   },
   'SMCY': {
     1761264000: 0.0,
@@ -2424,6 +2430,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1785888000: 100.0,
     1786492800: 100.0,
     1787097600: 100.0,
+    1787702400: 100.0,
   },
   'YETH': {
     1727395200: 100.0,
@@ -2495,6 +2502,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1785888000: 100.0,
     1786492800: 100.0,
     1787097600: 100.0,
+    1787702400: 100.0,
   },
   'YLDW': {
     1767571200: 69.6,
@@ -2554,6 +2562,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1784764800: 23.0,
     1785369600: 43.7,
     1785974400: 20.1,
+    1787184000: 43.6,
   },
   'YQQQ': {
     1761264000: 0.0,

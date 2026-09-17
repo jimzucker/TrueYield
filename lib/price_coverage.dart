@@ -4,5 +4,5 @@
 // Info tab (the full dataset lives in data/prices_history.json).
 
 const int kPriceFundCount = 100;
-const int kPriceCloseCount = 77053;
+const int kPriceCloseCount = 77152;
 const String kPriceEarliest = '2007-12-27';

@@ -1,0 +1,19 @@
+{
+  "active_seconds": 73583,
+  "assistant_turns": 6172,
+  "cache_creation_input_tokens": 20663910,
+  "cache_read_input_tokens": 1977615943,
+  "claude_seconds": 49165,
+  "covers_through": "2026-06-28T10:06",
+  "idle_seconds": 2597797,
+  "imported_at": "2026-09-20T14:11:30-04:00",
+  "input_tokens": 919504,
+  "note": "Frozen totals for the period below, imported from a committed report. Live transcripts ending at or before 'covers_through' are skipped so nothing is counted twice.",
+  "output_tokens": 6303905,
+  "project": "TrueYield",
+  "prompts": 275,
+  "records": 14404,
+  "source": "docs/SESSION_STATS.md",
+  "span_start": "2026-05-28 12:03",
+  "user_seconds": 24418
+}

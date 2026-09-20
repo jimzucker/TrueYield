@@ -1,6 +1,6 @@
 # Build session story
 
-The real numbers behind building **TrueYield**, pulled from this project's Claude Code session transcript (14,404 records spanning the whole build). Regenerate with `python3 scripts/session_stats.py --md`.
+The real numbers behind building **TrueYield**, pulled from this project's Claude Code session transcript (14,404 records spanning the whole build). Regenerate with `python3 ~/.claude/skills/stats/session_stats.py --md` (run from the repo root), or the /stats slash command.
 
 ## Tokens
 

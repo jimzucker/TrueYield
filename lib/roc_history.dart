@@ -5,9 +5,9 @@
 // (seconds, UTC midnight). Used to pre-fill the Distributions-tab
 // per-distribution ROC. See the project-roc-autofetch memory.
 //
-// As of: 2026-09-23
+// As of: 2026-09-24
 
-const String kRocHistoryAsOf = '2026-09-23';
+const String kRocHistoryAsOf = '2026-09-24';
 
 /// Ticker -> {payable-date epoch (s) -> return-of-capital %}.
 const Map<String, Map<int, double>> kRocByTickerByEpoch = {
@@ -327,6 +327,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1782345600: 69.2,
     1784764800: 100.0,
     1787788800: 84.3,
+    1790208000: 70.5,
   },
   'DRAY': {
     1761264000: 96.8,
@@ -1036,6 +1037,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1782345600: 100.0,
     1784764800: 100.0,
     1787788800: 1.2,
+    1790208000: 100.0,
   },
   'MRNY': {
     1761264000: 0.0,
@@ -1474,6 +1476,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1782345600: 97.5,
     1784764800: 100.0,
     1787788800: 99.7,
+    1790208000: 98.8,
   },
   'QYLG': {
     1603756800: 100.0,
@@ -1542,6 +1545,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1782345600: 93.3,
     1784764800: 100.0,
     1787788800: 95.6,
+    1790208000: 93.5,
   },
   'RBLY': {
     1761264000: 100.0,
@@ -1778,6 +1782,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1782345600: 100.0,
     1784764800: 81.5,
     1787788800: 100.0,
+    1790208000: 100.0,
   },
   'SDTY': {
     1766016000: 0.0,
@@ -2319,6 +2324,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1782345600: 90.4,
     1784764800: 98.0,
     1787788800: 93.1,
+    1790208000: 92.6,
   },
   'XYLG': {
     1603756800: 87.9,
@@ -2386,6 +2392,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1782345600: 74.8,
     1784764800: 91.9,
     1787788800: 79.6,
+    1790208000: 80.2,
   },
   'XYZY': {
     1761264000: 0.0,
@@ -2573,6 +2580,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1788307200: 100.0,
     1788912000: 100.0,
     1789516800: 100.0,
+    1790121600: 100.0,
   },
   'YLDW': {
     1767571200: 69.6,

@@ -5,9 +5,9 @@
 // are estimates; rerun the script to refresh. See the project-roc-autofetch
 // memory for the source/approach.
 //
-// As of: 2026-10-20
+// As of: 2026-10-21
 
-const String kRocDataAsOf = '2026-10-20';
+const String kRocDataAsOf = '2026-10-21';
 
 /// Ticker -> trailing return-of-capital %, used to auto-fill the ROC field
 /// when a known YieldMax fund is entered.
@@ -22,7 +22,7 @@ const Map<String, double> kRocByTicker = {
   'BRKC': 15.7,
   'BTCI': 94.2,
   'BUYW': 0.0,
-  'CHPY': 86.9,
+  'CHPY': 67.9,
   'CONY': 47.3,
   'CRCO': 85.9,
   'CRSH': 50.6,
@@ -46,7 +46,7 @@ const Map<String, double> kRocByTicker = {
   'GOOY': 49.3,
   'GPIQ': 72.0,
   'GPIX': 70.0,
-  'GPTY': 66.8,
+  'GPTY': 79.7,
   'HIYY': 55.0,
   'HOOY': 47.1,
   'HYGW': 20.6,
@@ -62,7 +62,7 @@ const Map<String, double> kRocByTicker = {
   'JEPQ': 0.0,
   'JPMO': 29.9,
   'KLIP': 87.5,
-  'LFGY': 66.3,
+  'LFGY': 70.4,
   'LQDW': 24.4,
   'MAGY': 100.0,
   'MARO': 57.9,
@@ -82,19 +82,19 @@ const Map<String, double> kRocByTicker = {
   'PLTY': 44.2,
   'PYPY': 67.1,
   'QDTE': 100.0,
-  'QDTY': 28.6,
+  'QDTY': 52.8,
   'QDVO': 97.6,
   'QQQI': 99.1,
   'QYLD': 98.9,
   'QYLG': 95.5,
   'RBLY': 72.8,
   'RDTE': 100.0,
-  'RDTY': 42.0,
+  'RDTY': 48.9,
   'RDYY': 61.6,
   'RYLD': 94.3,
-  'SDTY': 38.5,
+  'SDTY': 52.8,
   'SLJY': 99.1,
-  'SLTY': 79.8,
+  'SLTY': 82.6,
   'SMCY': 16.1,
   'SNOY': 31.7,
   'SPYI': 96.2,
@@ -118,7 +118,7 @@ const Map<String, double> kRocByTicker = {
   'YBTC': 100.0,
   'YETH': 100.0,
   'YLDW': 95.7,
-  'YMAG': 63.1,
-  'YMAX': 44.1,
+  'YMAG': 48.5,
+  'YMAX': 38.7,
   'YQQQ': 31.2,
 };

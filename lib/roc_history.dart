@@ -5,9 +5,9 @@
 // (seconds, UTC midnight). Used to pre-fill the Distributions-tab
 // per-distribution ROC. See the project-roc-autofetch memory.
 //
-// As of: 2026-10-28
+// As of: 2026-10-29
 
-const String kRocHistoryAsOf = '2026-10-28';
+const String kRocHistoryAsOf = '2026-10-29';
 
 /// Ticker -> {payable-date epoch (s) -> return-of-capital %}.
 const Map<String, Map<int, double>> kRocByTickerByEpoch = {
@@ -237,6 +237,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1766707200: 0.0,
     1774569600: 0.0,
     1782432000: 0.0,
+    1790553600: 0.0,
   },
   'DIPS': {
     1761264000: 91.6,
@@ -588,7 +589,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1779408000: 86.0,
     1781740800: 84.2,
   },
-  'IFLR': {1774915200: 0.0, 1782777600: 0.0},
+  'IFLR': {1774915200: 0.0, 1782777600: 0.0, 1790726400: 0.0},
   'IQQQ': {
     1715126400: 96.2,
     1717977600: 94.1,
@@ -2585,6 +2586,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1791331200: 100.0,
     1791936000: 100.0,
     1792540800: 100.0,
+    1793145600: 100.0,
   },
   'YETH': {
     1727395200: 100.0,
@@ -2665,6 +2667,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1791331200: 100.0,
     1791936000: 100.0,
     1792540800: 100.0,
+    1793145600: 100.0,
   },
   'YLDW': {
     1767571200: 69.6,

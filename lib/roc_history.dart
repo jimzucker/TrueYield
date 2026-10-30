@@ -5,9 +5,9 @@
 // (seconds, UTC midnight). Used to pre-fill the Distributions-tab
 // per-distribution ROC. See the project-roc-autofetch memory.
 //
-// As of: 2026-10-29
+// As of: 2026-10-30
 
-const String kRocHistoryAsOf = '2026-10-29';
+const String kRocHistoryAsOf = '2026-10-30';
 
 /// Ticker -> {payable-date epoch (s) -> return-of-capital %}.
 const Map<String, Map<int, double>> kRocByTickerByEpoch = {
@@ -62,6 +62,8 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1790208000: 100.0,
     1790812800: 100.0,
     1791417600: 100.0,
+    1792022400: 100.0,
+    1792627200: 100.0,
   },
   'AIYY': {
     1761264000: 78.1,
@@ -359,6 +361,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1785456000: 0.0,
     1788134400: 0.0,
     1790726400: 0.0,
+    1793318400: 0.0,
   },
   'FBY': {
     1761264000: 26.3,
@@ -437,6 +440,8 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1790208000: 100.0,
     1790812800: 100.0,
     1791417600: 100.0,
+    1792022400: 100.0,
+    1792627200: 100.0,
   },
   'FIAT': {
     1761264000: 96.7,
@@ -474,6 +479,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1785456000: 93.0,
     1788134400: 93.8,
     1790726400: 92.9,
+    1793318400: 92.3,
   },
   'FTQI': {
     1769731200: 100.0,
@@ -485,6 +491,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1785456000: 98.5,
     1788134400: 98.7,
     1790726400: 98.5,
+    1793318400: 98.7,
   },
   'GDXY': {
     1761264000: 93.8,
@@ -1317,6 +1324,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1791417600: 100.0,
     1792022400: 100.0,
     1792627200: 100.0,
+    1793232000: 100.0,
   },
   'QDTY': {
     1766016000: 19.3,
@@ -1716,6 +1724,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1791417600: 100.0,
     1792022400: 100.0,
     1792627200: 100.0,
+    1793232000: 100.0,
   },
   'RDTY': {
     1766016000: 100.0,
@@ -2277,6 +2286,7 @@ const Map<String, Map<int, double>> kRocByTickerByEpoch = {
     1791417600: 100.0,
     1792022400: 100.0,
     1792627200: 100.0,
+    1793232000: 100.0,
   },
   'XOMO': {
     1761264000: 40.3,
